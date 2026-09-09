@@ -1,0 +1,27 @@
+Execution ran out of memory.
+Please contact Databricks support and provide the trace ID: 7474651959882501/664256861470989/257418531225806/494780471674098.
+---------------------------------------------------------------------------
+The Python process exited with exit code 137 (SIGKILL: Killed). This may have been caused by an OOM error. Check your command's memory usage.
+
+
+
+The last 10 KB of the process's stderr and stdout can be found below. See driver logs for full logs.
+---------------------------------------------------------------------------
+Last messages on stderr:
+Wed Sep  9 19:07:19 2026 Connection to spark using Py4J from PID  3317
+Wed Sep  9 19:07:19 2026 Initialized gateway on port 36271
+Wed Sep  9 19:07:19 2026 Connected to spark using Py4J in {spark_mode} mode.
+---------------------------------------------------------------------------
+Last messages on stdout:
+NOTE: When using the `ipython kernel` entry point, Ctrl-C will not work.
+
+To exit, you will have to explicitly quit this process, by either sending
+"quit" from a client, or using Ctrl-\ in UNIX-like environments.
+
+To read more about this, see https://github.com/ipython/ipython/issues/2049
+
+
+To connect another client to this kernel, use:
+    --existing /databricks/kernel-connections/023b04154bf94dae946bde2f6d843a8f71e03acbfb9cd5a9415c2bdb9831d4fc.json
+Execution ran out of memory.
+Please contact Databricks support and provide the trace ID: 7474651959882501/664256861470989/257418531225806/494780471674098.
