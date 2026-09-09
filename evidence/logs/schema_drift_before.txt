@@ -1,0 +1,273 @@
+[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column, variable, or function parameter with name `o_customer_email` cannot be resolved. Did you mean one of the following? [`o_custkey`, `o_comment`, `o_clerk`, `o_orderkey`, `o_orderdate`]. SQLSTATE: 42703
+== DataFrame ==
+"col" was called from <command--1>, line 32 in cell [2]
+---------------------------------------------------------------------------
+AnalysisException                         Traceback (most recent call last)
+File ~/.ipykernel/2763/command--1-467684064:8
+      5 del sys
+      7 with open(filename, "rb") as f:
+----> 8   exec(compile(f.read(), filename, 'exec'))
+
+File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/schema_drift.py:43
+     39     summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
+     42 if __name__ == "__main__":
+---> 43     run()
+
+File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/schema_drift.py:34, in run()
+     30 # Defect: o_customer_email does not exist in orders_raw. Referencing it
+     31 # raises AnalysisException as soon as it's resolved below.
+     32 enriched = orders.withColumn("customer_email", F.col("o_customer_email"))
+---> 34 summary = enriched.groupBy("o_custkey").agg(
+     35     F.sum("o_totalprice").alias("total_value"),
+     36     F.count("o_orderkey").alias("order_count"),
+     37 )
+     39 summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
+
+File /databricks/python/lib/python3.12/site-packages/pyspark/sql/connect/dataframe.py:560, in DataFrame.groupBy(self, *cols)
+    558     _cols.append(c)
+    559 elif isinstance(c, str):
+--> 560     _cols.append(self[c])
+    561 elif isinstance(c, int) and not isinstance(c, bool):
+    562     if c < 1:
+
+File /databricks/python/lib/python3.12/site-packages/pyspark/sql/connect/dataframe.py:1884, in DataFrame.__getitem__(self, item)
+   1880     from pyspark.sql.connect.types import verify_col_name
+   1882     # Try best to verify the column name with cached schema
+   1883     # If fails, fall back to the server side validation
+-> 1884     if not verify_col_name(item, self._schema):
+   1885         self.select(item).isLocal()
+   1887 return self._col(item)
+
+File /databricks/python/lib/python3.12/site-packages/pyspark/sql/connect/dataframe.py:2034, in DataFrame._schema(self)
+   2032 if self._cached_schema is None:
+   2033     query = self._plan.to_proto(self._session.client)
+-> 2034     self._cached_schema = self._session.client.schema(query)
+   2035     try:
+   2036         self._cached_schema_serialized = CPickleSerializer().dumps(self._schema)
+
+File /databricks/python/lib/python3.12/site-packages/pyspark/sql/connect/client/core.py:1441, in SparkConnectClient.schema(self, plan)
+   1437 if logger.isEnabledFor(logging.DEBUG):
+   1438     # inside an if statement to not incur a performance cost converting proto to string
+   1439     # when not at debug log level.
+   1440     logger.debug(f"Schema for plan: {self._proto_to_string(plan, True)}")
+-> 1441 schema = self._analyze(method="schema", plan=plan).schema
+   1442 assert schema is not None
+   1443 # Server side should populate the struct field which is the schema.
+
+File /databricks/python/lib/python3.12/site-packages/pyspark/sql/connect/client/core.py:1746, in SparkConnectClient._analyze(self, method, **kwargs)
+   1744     raise SparkConnectException("Invalid state during retry exception handling.")
+   1745 except Exception as error:
+-> 1746     self._handle_error(error)
+
+File /databricks/python/lib/python3.12/site-packages/pyspark/sql/connect/client/core.py:2275, in SparkConnectClient._handle_error(self, error)
+   2273 self.thread_local.inside_error_handling = True
+   2274 if isinstance(error, grpc.RpcError):
+-> 2275     self._handle_rpc_error(error)
+   2276 elif isinstance(error, ValueError):
+   2277     if "Cannot invoke RPC" in str(error) and "closed" in str(error):
+
+File /databricks/python/lib/python3.12/site-packages/pyspark/sql/connect/client/core.py:2358, in SparkConnectClient._handle_rpc_error(self, rpc_error)
+   2354             logger.debug(f"Received ErrorInfo: {info}")
+   2356             self._handle_rpc_error_with_error_info(info, status.message, status_code)  # EDGE
+-> 2358             raise convert_exception(
+   2359                 info,
+   2360                 status.message,
+   2361                 self._fetch_enriched_error(info),
+   2362                 self._display_server_stack_trace(),
+   2363             ) from None
+   2365     raise SparkConnectGrpcException(
+   2366         message=status.message,
+   2367         sql_state=ErrorCode.CLIENT_UNEXPECTED_MISSING_SQL_STATE,  # EDGE
+   2368     ) from None
+   2369 else:
+
+AnalysisException: [UNRESOLVED_COLUMN.WITH_SUGGESTION] A column, variable, or function parameter with name `o_customer_email` cannot be resolved. Did you mean one of the following? [`o_custkey`, `o_comment`, `o_clerk`, `o_orderkey`, `o_orderdate`]. SQLSTATE: 42703;
+'Project [o_orderkey#11652L, o_custkey#11653L, o_orderstatus#11654, o_totalprice#11655, o_orderdate#11656, o_orderpriority#11657, o_clerk#11658, o_shippriority#11659, o_comment#11660, 'o_customer_email AS customer_email#11661]
++- SubqueryAlias self_healing_demo.pipeline.orders_raw
+   +- Relation self_healing_demo.pipeline.orders_raw[o_orderkey#11652L,o_custkey#11653L,o_orderstatus#11654,o_totalprice#11655,o_orderdate#11656,o_orderpriority#11657,o_clerk#11658,o_shippriority#11659,o_comment#11660] parquet
+
+
+JVM stacktrace:
+org.apache.spark.sql.catalyst.ExtendedAnalysisException
+	at org.apache.spark.sql.errors.QueryCompilationErrors$.unresolvedAttributeError(QueryCompilationErrors.scala:929)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.org$apache$spark$sql$catalyst$analysis$CheckAnalysis$$failUnresolvedAttribute(CheckAnalysis.scala:300)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$checkAnalysis0$16(CheckAnalysis.scala:698)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$checkAnalysis0$16$adapted(CheckAnalysis.scala:683)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.traverse$1(CheckAnalysis.scala:1489)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$foreachUpSkippingSecureView$1(CheckAnalysis.scala:1488)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$foreachUpSkippingSecureView$1$adapted(CheckAnalysis.scala:1488)
+	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.traverse$1(CheckAnalysis.scala:1488)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.foreachUpSkippingSecureView(CheckAnalysis.scala:1491)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$checkAnalysis0$15(CheckAnalysis.scala:683)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$checkAnalysis0$15$adapted(CheckAnalysis.scala:683)
+	at scala.collection.IterableOnceOps.foreach(IterableOnce.scala:630)
+	at scala.collection.IterableOnceOps.foreach$(IterableOnce.scala:628)
+	at scala.collection.AbstractIterable.foreach(Iterable.scala:936)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$checkAnalysis0$2(CheckAnalysis.scala:683)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$checkAnalysis0$2$adapted(CheckAnalysis.scala:436)
+	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:406)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.checkAnalysis0(CheckAnalysis.scala:436)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.checkAnalysis0$(CheckAnalysis.scala:403)
+	at org.apache.spark.sql.catalyst.analysis.Analyzer.checkAnalysis0(Analyzer.scala:718)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$checkAnalysis$1(CheckAnalysis.scala:388)
+	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
+	at com.databricks.spark.util.FrameProfiler$.$anonfun$record$1(FrameProfiler.scala:114)
+	at com.databricks.spark.util.FrameProfilerExporter$.maybeExportFrameProfiler(FrameProfilerExporter.scala:201)
+	at com.databricks.spark.util.FrameProfiler$.record(FrameProfiler.scala:105)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.checkAnalysis(CheckAnalysis.scala:375)
+	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.checkAnalysis$(CheckAnalysis.scala:371)
+	at org.apache.spark.sql.catalyst.analysis.Analyzer.checkAnalysis(Analyzer.scala:718)
+	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.$anonfun$resolveInFixedPoint$1(HybridAnalyzer.scala:402)
+	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
+	at org.apache.spark.sql.catalyst.QueryPlanningTracker$.withTracker(QueryPlanningTracker.scala:297)
+	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.resolveInFixedPoint(HybridAnalyzer.scala:402)
+	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.$anonfun$apply$1(HybridAnalyzer.scala:94)
+	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.withTrackedAnalyzerBridgeState(HybridAnalyzer.scala:131)
+	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.apply(HybridAnalyzer.scala:87)
+	at org.apache.spark.sql.catalyst.analysis.Analyzer.runAnalysis$1(Analyzer.scala:781)
+	at org.apache.spark.sql.catalyst.analysis.Analyzer.$anonfun$executeAndCheck$3(Analyzer.scala:786)
+	at org.apache.spark.sql.catalyst.analysis.Analyzer.runWithSessionConf(Analyzer.scala:852)
+	at org.apache.spark.sql.catalyst.analysis.Analyzer.$anonfun$executeAndCheck$2(Analyzer.scala:786)
+	at org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper$.markInAnalyzer(AnalysisHelper.scala:448)
+	at org.apache.spark.sql.catalyst.analysis.Analyzer.$anonfun$executeAndCheck$1(Analyzer.scala:786)
+	at com.databricks.sql.unity.SAMSnapshotHelper$.visitPlansDuringAnalysis(SAMSnapshotHelper.scala:43)
+	at org.apache.spark.sql.catalyst.analysis.Analyzer.executeAndCheck(Analyzer.scala:776)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyAnalyzed$4(QueryExecution.scala:850)
+	at org.apache.spark.sql.catalyst.QueryPlanningTracker$.measureRule(QueryPlanningTracker.scala:514)
+	at org.apache.spark.sql.catalyst.QueryPlanningTracker$.recordLatency(QueryPlanningTracker.scala:523)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyAnalyzed$3(QueryExecution.scala:851)
+	at com.databricks.spark.util.FrameProfiler$.$anonfun$record$1(FrameProfiler.scala:114)
+	at com.databricks.spark.util.FrameProfilerExporter$.maybeExportFrameProfiler(FrameProfilerExporter.scala:201)
+	at com.databricks.spark.util.FrameProfiler$.record(FrameProfiler.scala:105)
+	at org.apache.spark.sql.catalyst.QueryPlanningTracker.measurePhase(QueryPlanningTracker.scala:1256)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$8(QueryExecution.scala:1417)
+	at org.apache.spark.sql.execution.SQLExecution$.$anonfun$withExecutionPhase$1(SQLExecution.scala:382)
+	at com.databricks.util.TracingSpanUtils$.withTracing(TracingSpanUtils.scala:251)
+	at com.databricks.spark.util.DatabricksTracingHelper.withSpan(DatabricksSparkTracingHelper.scala:290)
+	at com.databricks.spark.util.DBRTracing$.withSpan(DBRTracing.scala:87)
+	at org.apache.spark.sql.execution.SQLExecution$.withExecutionPhase(SQLExecution.scala:363)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$7(QueryExecution.scala:1417)
+	at org.apache.spark.sql.execution.QueryExecution$.withInternalError(QueryExecution.scala:2268)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$5(QueryExecution.scala:1408)
+	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$4(QueryExecution.scala:1405)
+	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$3(QueryExecution.scala:1405)
+	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$2(QueryExecution.scala:1404)
+	at com.databricks.sql.history.ultron.PredictionBackendBatching$.$anonfun$withBatchedUpdates$1(ObservationBuffer.scala:484)
+	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
+	at com.databricks.sql.history.ultron.PredictionBackendBatching$.withBatchedUpdates(ObservationBuffer.scala:484)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$withQueryExecutionId$3(QueryExecution.scala:1384)
+	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
+	at org.apache.spark.sql.execution.QueryExecution.localBlock$1(QueryExecution.scala:1383)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$withQueryExecutionId$5(QueryExecution.scala:1395)
+	at com.databricks.unity.UCSManager$.withTemporaryScope(UCSManager.scala:168)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$withQueryExecutionId$4(QueryExecution.scala:1394)
+	at org.apache.spark.sql.execution.QueryExecution$.$anonfun$runWithWrappers$2(QueryExecution.scala:2523)
+	at org.apache.spark.sql.execution.QueryExecution$.org$apache$spark$sql$execution$QueryExecution$$runWithWrappers(QueryExecution.scala:2522)
+	at org.apache.spark.sql.execution.QueryExecution.withQueryExecutionId(QueryExecution.scala:1395)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$1(QueryExecution.scala:1403)
+	at org.apache.spark.sql.SparkSession.withActive(SparkSession.scala:866)
+	at org.apache.spark.sql.execution.QueryExecution.executePhase(QueryExecution.scala:1402)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyAnalyzed$2(QueryExecution.scala:842)
+	at com.databricks.sql.util.MemoryTrackerHelper.withMemoryTracking(MemoryTrackerHelper.scala:111)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyAnalyzed$1(QueryExecution.scala:841)
+	at scala.util.Try$.apply(Try.scala:217)
+	at org.apache.spark.util.Utils$.doTryWithCallerStacktrace(Utils.scala:1797)
+	at org.apache.spark.util.Utils$.getTryWithCallerStacktrace(Utils.scala:1847)
+	at org.apache.spark.util.LazyTry.get(LazyTry.scala:78)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$analyzed$1(QueryExecution.scala:967)
+	at org.apache.spark.sql.execution.QueryExecution.withAbortTransactionOnFailure(QueryExecution.scala:1792)
+	at org.apache.spark.sql.execution.QueryExecution.analyzed(QueryExecution.scala:967)
+	at org.apache.spark.sql.execution.QueryExecution.assertAnalyzed(QueryExecution.scala:727)
+	at org.apache.spark.sql.classic.Dataset.<init>(Dataset.scala:377)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.$anonfun$process$10(SparkConnectAnalyzeHandler.scala:181)
+	at org.apache.spark.sql.connect.utils.TimingUtils$.withTiming(TimingUtils.scala:35)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.getDataFrameWithoutExecuting$1(SparkConnectAnalyzeHandler.scala:168)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.$anonfun$process$16(SparkConnectAnalyzeHandler.scala:194)
+	at com.databricks.spark.connect.service.UtilizationMetrics.recordActiveQueries(UtilizationMetrics.scala:102)
+	at com.databricks.spark.connect.service.UtilizationMetrics.recordActiveQueries$(UtilizationMetrics.scala:99)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.recordActiveQueries(SparkConnectAnalyzeHandler.scala:60)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.process(SparkConnectAnalyzeHandler.scala:194)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.$anonfun$handle$5(SparkConnectAnalyzeHandler.scala:108)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.$anonfun$handle$5$adapted(SparkConnectAnalyzeHandler.scala:100)
+	at org.apache.spark.sql.connect.service.SessionHolder.$anonfun$withSession$2(SessionHolder.scala:913)
+	at org.apache.spark.sql.SparkSession.withActive(SparkSession.scala:866)
+	at org.apache.spark.sql.connect.service.SessionHolder.$anonfun$withSession$1(SessionHolder.scala:913)
+	at org.apache.spark.JobArtifactSet$.withActiveJobArtifactState(JobArtifactSet.scala:97)
+	at org.apache.spark.sql.artifact.ArtifactManager.$anonfun$withResources$1(ArtifactManager.scala:124)
+	at org.apache.spark.sql.artifact.ArtifactManager.withClassLoaderIfNeeded(ArtifactManager.scala:118)
+	at org.apache.spark.sql.artifact.ArtifactManager.withResources(ArtifactManager.scala:123)
+	at org.apache.spark.sql.connect.service.SessionHolder.withSession(SessionHolder.scala:912)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.$anonfun$handle$1(SparkConnectAnalyzeHandler.scala:100)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.$anonfun$handle$1$adapted(SparkConnectAnalyzeHandler.scala:67)
+	at com.databricks.spark.connect.logging.rpc.SparkConnectRpcMetricsCollectorUtils$.collectMetrics(SparkConnectRpcMetricsCollector.scala:298)
+	at org.apache.spark.sql.connect.service.SparkConnectAnalyzeHandler.handle(SparkConnectAnalyzeHandler.scala:66)
+	at org.apache.spark.sql.connect.service.SparkConnectService.analyzePlan(SparkConnectService.scala:118)
+	at org.apache.spark.connect.proto.SparkConnectServiceGrpc$MethodHandlers.invoke(SparkConnectServiceGrpc.java:1008)
+	at org.sparkproject.connect.io.grpc.stub.ServerCalls$UnaryServerCallHandler$UnaryServerCallListener.onHalfClose(ServerCalls.java:182)
+	at org.sparkproject.connect.io.grpc.PartialForwardingServerCallListener.onHalfClose(PartialForwardingServerCallListener.java:35)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:23)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener$SimpleForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:40)
+	at org.sparkproject.connect.io.grpc.PartialForwardingServerCallListener.onHalfClose(PartialForwardingServerCallListener.java:35)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:23)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener$SimpleForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:40)
+	at org.sparkproject.connect.io.grpc.PartialForwardingServerCallListener.onHalfClose(PartialForwardingServerCallListener.java:35)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:23)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener$SimpleForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:40)
+	at org.sparkproject.connect.io.grpc.Contexts$ContextualizedServerCallListener.onHalfClose(Contexts.java:86)
+	at org.sparkproject.connect.io.grpc.PartialForwardingServerCallListener.onHalfClose(PartialForwardingServerCallListener.java:35)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:23)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener$SimpleForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:40)
+	at com.databricks.spark.connect.service.AuthenticationInterceptor$AuthenticatedServerCallListener.$anonfun$onHalfClose$1(AuthenticationInterceptor.scala:528)
+	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
+	at com.databricks.unity.UCSEphemeralState$Handle.runWith(UCSEphemeralState.scala:51)
+	at com.databricks.unity.HandleImpl.runWith(UCSHandle.scala:128)
+	at com.databricks.spark.connect.service.RequestContext.$anonfun$runWith$4(RequestContext.scala:494)
+	at com.databricks.util.TracingSpanUtils$.withSyncTracingAndParentFromHeaders(TracingSpanUtils.scala:456)
+	at com.databricks.spark.util.DatabricksTracingHelper.withSpanFromRequest(DatabricksSparkTracingHelper.scala:270)
+	at com.databricks.spark.util.DBRTracing$.withSpanFromRequest(DBRTracing.scala:75)
+	at com.databricks.spark.connect.service.RequestContext.runWithSpanFromTags(RequestContext.scala:517)
+	at com.databricks.spark.connect.service.RequestContext.$anonfun$runWith$3(RequestContext.scala:494)
+	at com.databricks.spark.connect.service.RequestContext$.com$databricks$spark$connect$service$RequestContext$$withLocalProperties(RequestContext.scala:729)
+	at com.databricks.spark.connect.service.RequestContext.$anonfun$runWith$2(RequestContext.scala:493)
+	at com.databricks.logging.AttributionContextTracing.$anonfun$withAttributionContext$1(AttributionContextTracing.scala:146)
+	at com.databricks.logging.AttributionContext$.$anonfun$withValue$1(AttributionContext.scala:349)
+	at scala.util.DynamicVariable.withValue(DynamicVariable.scala:59)
+	at com.databricks.logging.AttributionContext$.withValue(AttributionContext.scala:345)
+	at com.databricks.logging.AttributionContextTracing.withAttributionContext(AttributionContextTracing.scala:144)
+	at com.databricks.logging.AttributionContextTracing.withAttributionContext$(AttributionContextTracing.scala:141)
+	at com.databricks.spark.util.PublicDBLogging.withAttributionContext(DatabricksSparkUsageLogger.scala:29)
+	at com.databricks.spark.util.UniverseAttributionContextWrapper.withValue(AttributionContextUtils.scala:266)
+	at com.databricks.spark.connect.service.RequestContext.$anonfun$runWith$1(RequestContext.scala:492)
+	at com.databricks.spark.connect.service.RequestContext.withContext(RequestContext.scala:525)
+	at com.databricks.spark.connect.service.RequestContext.runWith(RequestContext.scala:485)
+	at com.databricks.spark.connect.service.AuthenticationInterceptor$AuthenticatedServerCallListener.onHalfClose(AuthenticationInterceptor.scala:528)
+	at org.sparkproject.connect.io.grpc.PartialForwardingServerCallListener.onHalfClose(PartialForwardingServerCallListener.java:35)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:23)
+	at org.sparkproject.connect.io.grpc.ForwardingServerCallListener$SimpleForwardingServerCallListener.onHalfClose(ForwardingServerCallListener.java:40)
+	at org.sparkproject.connect.io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.halfClosed(ServerCallImpl.java:356)
+	at org.sparkproject.connect.io.grpc.internal.ServerImpl$JumpToApplicationThreadServerStreamListener$1HalfClosed.runInContext(ServerImpl.java:861)
+	at org.sparkproject.connect.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37)
+	at org.sparkproject.connect.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133)
+	at org.apache.spark.util.threads.SparkThreadLocalCapturingRunnable.$anonfun$run$1(SparkThreadLocalForwardingThreadPoolExecutor.scala:171)
+	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
+	at com.databricks.spark.util.DBRTracing$.withSpanFromParent(DBRTracing.scala:70)
+	at org.apache.spark.util.threads.SparkThreadLocalCapturingHelper.$anonfun$runWithCaptured$7(SparkThreadLocalForwardingThreadPoolExecutor.scala:124)
+	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
+	at org.apache.spark.util.threads.SparkThreadLocalCapturingHelper.$anonfun$runWithCaptured$6(SparkThreadLocalForwardingThreadPoolExecutor.scala:123)
+	at com.databricks.sql.transaction.tahoe.mst.MSTThreadHelper$.runWithMSTContext(MSTThreadHelper.scala:77)
+	at org.apache.spark.util.threads.SparkThreadLocalCapturingHelper.$anonfun$runWithCaptured$5(SparkThreadLocalForwardingThreadPoolExecutor.scala:120)
+	at com.databricks.spark.util.IdentityClaim$.withClaim(IdentityClaim.scala:48)
+	at org.apache.spark.util.threads.SparkThreadLocalCapturingHelper.$anonfun$runWithCaptured$4(SparkThreadLocalForwardingThreadPoolExecutor.scala:119)
+	at com.databricks.unity.UCSEphemeralState$Handle.runWith(UCSEphemeralState.scala:51)
+	at org.apache.spark.util.threads.SparkThreadLocalCapturingHelper.runWithCaptured(SparkThreadLocalForwardingThreadPoolExecutor.scala:118)
+	at org.apache.spark.util.threads.SparkThreadLocalCapturingHelper.runWithCaptured$(SparkThreadLocalForwardingThreadPoolExecutor.scala:95)
+	at org.apache.spark.util.threads.SparkThreadLocalCapturingRunnable.runWithCaptured(SparkThreadLocalForwardingThreadPoolExecutor.scala:168)
+	at org.apache.spark.util.threads.SparkThreadLocalCapturingRunnable.run(SparkThreadLocalForwardingThreadPoolExecutor.scala:171)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.lang.Thread.run(Thread.java:840)
+Workload failed, see run output for details

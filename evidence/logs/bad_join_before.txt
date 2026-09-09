@@ -1,0 +1,30 @@
+AssertionError: row explosion detected: 11843374 output rows from 5000 input rows (>10x) — likely a duplicate-key / non-unique join key defect
+---------------------------------------------------------------------------
+AssertionError                            Traceback (most recent call last)
+File ~/.ipykernel/2652/command--1-2616493043:8
+      5 del sys
+      7 with open(filename, "rb") as f:
+----> 8   exec(compile(f.read(), filename, 'exec'))
+
+File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/bad_join.py:69
+     65     summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
+     68 if __name__ == "__main__":
+---> 69     run()
+
+File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/bad_join.py:55, in run()
+     51 print(f"[bad_join] explosion factor: {output_count / input_count:.1f}x")
+     53 # Databricks won't fail this join on its own, so make the row-count
+     54 # explosion a hard job failure with an explicit signature.
+---> 55 assert output_count <= input_count * MAX_EXPLOSION_FACTOR, (
+     56     f"row explosion detected: {output_count} output rows from "
+     57     f"{input_count} input rows (>{MAX_EXPLOSION_FACTOR}x) — "
+     58     f"likely a duplicate-key / non-unique join key defect"
+     59 )
+     61 summary = joined.groupBy("a.o_custkey").agg(
+     62     F.sum("a.o_totalprice").alias("total_value"),
+     63     F.count("a.o_orderkey").alias("order_count"),
+     64 )
+     65 summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
+
+AssertionError: row explosion detected: 11843374 output rows from 5000 input rows (>10x) — likely a duplicate-key / non-unique join key defect
+Workload failed, see run output for details
