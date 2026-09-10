@@ -10,9 +10,11 @@ This is a portfolio project demonstrating a self-healing data pipeline for Datab
 |---|---|---|
 | `schema_drift` | `AnalysisException` / column not found / type mismatch on read | Add explicit schema or `mergeSchema` option |
 | `null_violation` | NOT NULL constraint violated / null in non-nullable write | `.na.drop()` or `.fillna()` on the offending column |
-| `oom` | `OutOfMemoryError` / executor lost / spill warnings | Repartition or convert join to broadcast |
+| `oom` | Exit code 137 (SIGKILL) with no Python traceback, "Execution ran out of memory" platform message, OR `OutOfMemoryError` / executor lost / spill warnings if triggered at the Spark level | Repartition or convert join to broadcast |
 | `bad_join` | Row explosion / duplicate keys / Cartesian product | Validate join key uniqueness, switch join type |
 | `type_mismatch` | Cannot resolve / implicit cast error | Explicit `.cast()` on offending column |
+
+Unlike the other four categories, `oom` failures may appear as a platform-level process kill (exit code, no stack trace) rather than a Python/Spark exception — this matters for how the log-parser agent below must handle it.
 
 ## 3. Agent Responsibilities
 
