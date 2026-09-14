@@ -29,6 +29,10 @@ def run() -> None:
 
     # Defect: o_customer_email does not exist in orders_raw. Referencing it
     # raises AnalysisException as soon as it's resolved below.
+    assert "o_customer_email" in orders.columns, (
+        f"schema drift: expected column 'o_customer_email' not found in {SOURCE_TABLE}; "
+        f"available columns: {orders.columns}"
+    )
     enriched = orders.withColumn("customer_email", F.col("o_customer_email"))
 
     summary = enriched.groupBy("o_custkey").agg(
