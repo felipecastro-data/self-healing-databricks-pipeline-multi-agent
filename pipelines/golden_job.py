@@ -19,6 +19,8 @@ from pyspark.sql import functions as F
 SOURCE_TABLE = "self_healing_demo.pipeline.orders_raw"
 TARGET_TABLE = "self_healing_demo.pipeline.orders_summary"
 
+# Reference baseline: the known-good pipeline every broken_scenarios/*.py deliberately deviates from.
+
 
 def run() -> None:
     orders = spark.table(SOURCE_TABLE)
