@@ -1,19 +1,19 @@
 """broken_scenarios/bad_join.py — failure taxonomy category: bad_join.
 
-Joins orders_raw to itself on o_orderstatus — a low-cardinality, non-unique
-key (verified against live data: only 3 distinct values, 'O'/'F'/'P') —
-without deduplicating either side first. Every row on the left matches every
-row on the right that shares the same status, so the join multiplies row
-counts within each status group instead of matching 1:1 (duplicate-key row
-explosion, not a clean Cartesian product across the whole table).
+Originally joined orders_raw to itself on o_orderstatus — a low-cardinality,
+non-unique key (only 3 distinct values, 'O'/'F'/'P') — without deduplicating
+either side first, so every row on the left matched every row on the right
+sharing the same status, exploding the output to roughly 2,000x the input
+row count (duplicate-key row explosion, not a full Cartesian product).
 
-Databricks itself won't raise a hard error for a row-count explosion — a big
-join is still a "valid" query — so this script makes the failure explicit:
-it prints input/output row counts (visible in the run output even if the
-job doesn't hard-fail) and asserts the output stays under a sane multiple of
-the input, raising if it doesn't. Against this workspace's actual orders_raw
-distribution, the join produces roughly 2,000x the input row count, so the
-assertion is expected to fail reliably.
+Fixed by the self-healing pipeline (patch-proposer's bad_join remediation,
+applied via apply_patch): the right side of the join is now deduplicated on
+o_orderstatus and its uniqueness asserted before the join runs, so each left
+row matches at most one right row per status. The join still targets the
+original o_orderstatus key — only the multiplication is eliminated. The
+row-count assertion further below (against MAX_EXPLOSION_FACTOR) remains in
+place as a guard against a regression of this same defect; against this
+workspace's current orders_raw data, it no longer fires.
 
 This matches the `bad_join` row of the failure taxonomy in CLAUDE.md.
 Writes to self_healing_demo.pipeline.orders_summary_bad_join.
