@@ -162,7 +162,16 @@ def get_run_output(run_id: str) -> str:
     w = _client()
     out = w.jobs.get_run_output(run_id=rid)
 
+    # stdout (print() output) is a separate field from the exception — a
+    # script can print diagnostic values (row counts, computed ratios, etc.)
+    # that never make it into the exception message itself, so this must be
+    # captured too, not just error/error_trace.
     parts = []
+    if out.logs:
+        logs = out.logs.rstrip("\n")
+        if out.logs_truncated:
+            logs += "\n(...logs truncated by the Databricks API...)"
+        parts.append(logs)
     if out.error:
         parts.append(out.error)
     if out.error_trace:

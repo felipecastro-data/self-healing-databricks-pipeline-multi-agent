@@ -37,9 +37,11 @@ def run() -> None:
     orders = spark.table(SOURCE_TABLE)
     input_count = orders.count()
 
-    # Defect: joining on o_orderstatus (non-unique, only 3 distinct values)
-    # without deduplicating first. Every row matches every other row that
-    # shares the same status -> quadratic blowup within each status group.
+    # Fix: o_orderstatus is non-unique (only 3 distinct values), so the b
+    # side is deduplicated on it and its uniqueness asserted before the join
+    # — each left row now matches at most one right row per status, instead
+    # of every row in that status group (the row-explosion this used to
+    # cause), while still joining on the original o_orderstatus key.
     orders_b = orders.dropDuplicates(["o_orderstatus"])
     assert orders_b.count() == orders_b.select("o_orderstatus").distinct().count(), (
         "join key o_orderstatus is not unique on the b side after dedup"
