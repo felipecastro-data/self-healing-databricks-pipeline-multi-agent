@@ -1,3 +1,5 @@
 pyspark
 pandas
 databricks-sdk
+python-dotenv
+mcp<2
