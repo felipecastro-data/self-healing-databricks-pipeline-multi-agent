@@ -40,8 +40,12 @@ def run() -> None:
     # Defect: joining on o_orderstatus (non-unique, only 3 distinct values)
     # without deduplicating first. Every row matches every other row that
     # shares the same status -> quadratic blowup within each status group.
+    orders_b = orders.dropDuplicates(["o_orderstatus"])
+    assert orders_b.count() == orders_b.select("o_orderstatus").distinct().count(), (
+        "join key o_orderstatus is not unique on the b side after dedup"
+    )
     joined = orders.alias("a").join(
-        orders.alias("b"),
+        orders_b.alias("b"),
         on=F.col("a.o_orderstatus") == F.col("b.o_orderstatus"),
     )
     output_count = joined.count()
