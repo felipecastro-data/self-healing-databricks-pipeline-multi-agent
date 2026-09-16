@@ -1,16 +1,28 @@
 """broken_scenarios/type_mismatch.py — failure taxonomy category: type_mismatch.
 
-Runs the same aggregation as golden_job.py, but additionally computes a flag
-column that compares o_totalprice (DECIMAL(18,2)) directly against
-o_orderdate (DATE) with no explicit cast. Spark has no implicit conversion
-between DECIMAL and DATE, so resolving this expression raises an
-AnalysisException at DataFrame-resolution time —
+Originally computed a flag column that compared o_totalprice
+(DECIMAL(18,2)) directly against o_orderdate (DATE) with no explicit cast.
+Spark has no implicit conversion between DECIMAL and DATE, so resolving
+this expression raised an AnalysisException at DataFrame-resolution time —
 "[DATATYPE_MISMATCH.BINARY_OP_DIFF_TYPES] Cannot resolve ... due to data
-type mismatch" (verified live against this workspace's SQL engine) — the
-exact "cannot resolve / implicit cast error" signature in the
-`type_mismatch` row of the failure taxonomy in CLAUDE.md. This fails at
-plan-analysis time, before any data is read, so it is deterministic
-regardless of the actual contents of orders_raw.
+type mismatch" — the "cannot resolve / implicit cast error" signature in
+the `type_mismatch` row of the failure taxonomy in CLAUDE.md.
+
+Fixed by the self-healing pipeline (patch-proposer's type_mismatch
+remediation, applied via apply_patch) — but it took two diagnostic passes:
+the first patch cast o_orderdate directly to decimal(18,2)
+(`.cast("decimal(18,2)")`), which failed with a different error,
+"[DATATYPE_MISMATCH.CAST_WITH_FUNC_SUGGESTION] ... cannot cast \"DATE\" to
+\"DECIMAL(18,2)\"" — Spark has no direct DATE->DECIMAL cast path at all
+(the platform error message itself suggests the `UNIX_DATE` function
+instead). The second pass's fix instead chains three explicit `.cast()`
+calls through a Spark-supported path: DATE -> TIMESTAMP -> LONG ->
+DECIMAL(18,2), converting o_orderdate to its epoch-seconds representation
+before comparing. This still fits the `type_mismatch` template
+("explicit `.cast()` on offending column") without introducing a new
+function call. The comparison itself remains semantically meaningless
+(price vs. a date-derived number) — this scenario only exercises the
+type-mismatch failure/remediation path, not real business logic.
 
 Writes to self_healing_demo.pipeline.orders_summary_type_mismatch.
 
@@ -28,10 +40,10 @@ TARGET_TABLE = "self_healing_demo.pipeline.orders_summary_type_mismatch"
 def run() -> None:
     orders = spark.table(SOURCE_TABLE)
 
-    # Defect: comparing a DECIMAL column directly against a DATE column with
-    # no explicit .cast(). There is no implicit DECIMAL<->DATE conversion in
-    # Spark, so resolving this column raises AnalysisException as soon as
-    # it's referenced below.
+    # Fix: o_orderdate has no direct cast to decimal, so it's chained through
+    # timestamp -> long (epoch seconds) -> decimal(18,2), a Spark-supported
+    # cast path, instead of the unsupported direct DATE->DECIMAL cast tried
+    # in the first patch attempt.
     flagged = orders.withColumn(
         "price_equals_order_date",
         F.col("o_totalprice") == F.col("o_orderdate").cast("timestamp").cast("long").cast("decimal(18,2)"),
