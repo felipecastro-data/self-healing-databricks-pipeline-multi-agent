@@ -209,8 +209,7 @@ def apply_patch(
 
     old_snippet must match the file's current contents exactly once. Zero
     matches or more than one match is a loud failure — no fuzzy matching, no
-    silent partial replacement (same fail-loud principle as
-    orchestrate.parse_classification).
+    silent partial replacement.
 
     On success: stages and commits the change ("fix: apply {category} patch
     to {file_path}", or "fix: apply patch to {file_path}" if category is
@@ -319,6 +318,13 @@ def run_job(job_name: str) -> dict[str, Any]:
     INTERNAL_ERROR with a resolved result_state. Anything else re-raises the
     original OperationFailed rather than silently returning a clean-looking
     result for a wait failure that wasn't actually a task failure.
+
+    Like list_runs, the returned run_id is the task-level run_id, not the
+    parent job-level run_id — get_run_output only accepts the former (the
+    Jobs API rejects it on a multi-task parent run), so this must resolve it
+    the same way list_runs does rather than handing back the raw run_id
+    run_now/get_run report at the job level. Feed this run_id straight into
+    get_run_output.
     """
     job_id = _resolve_job_id(job_name)
     w = _client()
@@ -332,9 +338,11 @@ def run_job(job_name: str) -> dict[str, Any]:
         result_state = run.state.result_state if run.state else None
         if life_cycle_state != RunLifeCycleState.INTERNAL_ERROR or result_state is None:
             raise
+    task_run_id = run.tasks[-1].run_id if run.tasks else run.run_id
     return {
         "job_name": job_name,
-        "run_id": run.run_id,
+        "run_id": task_run_id,
+        "job_run_id": run.run_id,
         "state": _run_state_label(run),
         "run_page_url": run.run_page_url,
     }
