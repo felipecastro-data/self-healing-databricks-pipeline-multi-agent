@@ -34,7 +34,7 @@ def run() -> None:
     # it's referenced below.
     flagged = orders.withColumn(
         "price_equals_order_date",
-        F.col("o_totalprice") == F.col("o_orderdate"),
+        F.col("o_totalprice") == F.col("o_orderdate").cast("decimal(18,2)"),
     )
 
     summary = flagged.groupBy("o_custkey").agg(
