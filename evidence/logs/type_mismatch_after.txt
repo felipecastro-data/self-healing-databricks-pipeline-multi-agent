@@ -1,0 +1,5 @@
+[type_mismatch] run_id: 182106144832444
+[type_mismatch] job_run_id: 239715506247208
+[type_mismatch] state: SUCCESS
+[type_mismatch] run_page_url: https://dbc-09a4bc2c-61e1.cloud.databricks.com/?o=7474651959882501#job/983545719729206/run/239715506247208
+[type_mismatch] get_run_output: (no error/output text for this run — it may have succeeded, or its output is a notebook/SQL/dashboard result type this tool doesn't parse)
