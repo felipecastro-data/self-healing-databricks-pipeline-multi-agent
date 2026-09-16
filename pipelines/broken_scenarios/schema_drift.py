@@ -27,13 +27,19 @@ TARGET_TABLE = "self_healing_demo.pipeline.orders_summary_schema_drift"
 def run() -> None:
     orders = spark.table(SOURCE_TABLE)
 
-    # Defect: o_customer_email does not exist in orders_raw. Referencing it
-    # raises AnalysisException as soon as it's resolved below.
-    assert "o_customer_email" in orders.columns, (
-        f"schema drift: expected column 'o_customer_email' not found in {SOURCE_TABLE}; "
-        f"available columns: {orders.columns}"
-    )
-    enriched = orders.withColumn("customer_email", F.col("o_customer_email"))
+    # Fix: o_customer_email does not exist in orders_raw. Rather than assert
+    # it must be present (which only renamed the exception without resolving
+    # the drift), branch on the table's actual schema so the job proceeds —
+    # falling back to a NULL customer_email, with an explicit warning printed
+    # so the degradation is visible in the job's output/logs.
+    if "o_customer_email" in orders.columns:
+        enriched = orders.withColumn("customer_email", F.col("o_customer_email"))
+    else:
+        print(
+            f"[schema_drift] WARNING: column 'o_customer_email' not found in {SOURCE_TABLE} "
+            f"(available columns: {orders.columns}); setting customer_email to NULL for all rows"
+        )
+        enriched = orders.withColumn("customer_email", F.lit(None))
 
     summary = enriched.groupBy("o_custkey").agg(
         F.sum("o_totalprice").alias("total_value"),
