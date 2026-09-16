@@ -93,7 +93,7 @@ If you notice yourself about to write a sentence that isn't part of `Category:`,
 
 ### Note for downstream automation
 
-If `orchestrate.py` or another consumer needs a machine-parseable field from this output (e.g. the category, to log or gate on), extract it deterministically — e.g. a regex on the `Category:` line — the same way it treats the `classifier` agent's output, rather than relying on this agent's self-formatting being perfect every time.
+`orchestrate.py` does not parse or gate on this output today — it hands the raw run log to a headless Claude Code session that invokes this agent chain and prints whatever comes back, then stops. If a future consumer needs a machine-parseable field from this output (e.g. the category, to log or gate on), extract it deterministically — e.g. a regex on the `Category:` line — rather than relying on this agent's self-formatting being perfect every time.
 
 ### Example (correctly formatted output, null_violation case)
 

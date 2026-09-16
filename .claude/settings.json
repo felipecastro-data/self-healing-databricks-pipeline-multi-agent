@@ -1,7 +1,37 @@
 {
   "hooks": {
-    "PreToolUse": [],
-    "PostToolUse": [],
-    "SubagentStop": []
+    "PreToolUse": [
+      {
+        "matcher": "mcp__databricks-self-healing-pipeline__apply_patch|mcp__databricks-self-healing-pipeline__run_job",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/approval_gate.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__databricks-self-healing-pipeline__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/log_tool_use.sh\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "log-parser|classifier|patch-proposer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/log_subagent_stop.sh\""
+          }
+        ]
+      }
+    ]
   }
 }
