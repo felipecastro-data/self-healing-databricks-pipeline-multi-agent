@@ -167,8 +167,14 @@ Full machine-readable trail for the `type_mismatch` runs: [`evidence/run_journal
 
 ## Screenshots
 
-_To be added:_
-- Databricks Jobs list showing the six registered pipeline jobs
-- A failed run's error page (e.g. the `type_mismatch` `AnalysisException`)
-- The `PreToolUse` approval prompt blocking `apply_patch`/`run_job`
-- An excerpt of `evidence/run_journal.jsonl` showing the diagnostic trail
+![Databricks Jobs list](docs/screenshots/jobs-list.png)
+_Databricks Jobs list showing the registered pipeline jobs._
+
+![Type mismatch failure](docs/screenshots/type-mismatch-failure.png)
+_The `CAST_WITH_FUNC_SUGGESTION` `AnalysisException` — the first patch attempt's failure (round 2 of the `type_mismatch` walkthrough above), not the original `BINARY_OP_DIFF_TYPES` error._
+
+![Approval gate prompt](docs/screenshots/approval-gate-prompt.png)
+_The `PreToolUse` approval prompt blocking `apply_patch`/`run_job` until explicitly approved._
+
+![Run journal excerpt](docs/screenshots/run-journal-excerpt.png)
+_An excerpt of `evidence/run_journal.jsonl` showing the diagnostic trail._
