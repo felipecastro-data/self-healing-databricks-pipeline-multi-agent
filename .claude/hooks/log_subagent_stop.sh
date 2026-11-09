@@ -6,6 +6,7 @@
 # script independently hard-validates agent_type against the same three
 # exact names before writing anything, so a matcher misconfiguration or an
 # unexpected payload can never append an untrusted/bogus entry to evidence.
+# Workspace host and user path are redacted before anything reaches the journal.
 set -uo pipefail
 
 JOURNAL="${CLAUDE_PROJECT_DIR}/evidence/run_journal.jsonl"
@@ -19,7 +20,7 @@ case "$AGENT_NAME" in
 esac
 
 printf '%s' "$PAYLOAD" | jq -c --arg ts "$TIMESTAMP" '
-  (.last_assistant_message // "") as $raw |
+  ((.last_assistant_message // "") | (. | gsub("https://[A-Za-z0-9.-]+\\.cloud\\.databricks\\.com"; "https://<workspace-host>") | gsub("/Workspace/Users/[^/\"\\\\ ]+"; "/Workspace/Users/<user>"))) as $raw |
   {
     timestamp: $ts,
     hook_event: "SubagentStop",
