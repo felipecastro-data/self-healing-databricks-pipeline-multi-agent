@@ -8,10 +8,10 @@ This is a portfolio project demonstrating a self-healing data pipeline for Datab
 
 | Category | Log Signature to Detect | Template Remediation |
 |---|---|---|
-| `schema_drift` | `AnalysisException` / column not found / type mismatch on read | Add explicit schema or `mergeSchema` option |
-| `null_violation` | NOT NULL constraint violated / null in non-nullable write | `.na.drop()` or `.fillna()` on the offending column |
+| `schema_drift` | `AnalysisException` / column not found / type mismatch on read / `DataQualityError` with `check=expected_columns` | Add explicit schema or `mergeSchema` option |
+| `null_violation` | NOT NULL constraint violated / null in non-nullable write / `DataQualityError` with `check=not_null` | `.na.drop()` or `.fillna()` on the offending column |
 | `oom` | Exit code 137 (SIGKILL) with no Python traceback, "Execution ran out of memory" platform message, OR `OutOfMemoryError` / executor lost / spill warnings if triggered at the Spark level | Repartition or convert join to broadcast |
-| `bad_join` | Row explosion / duplicate keys / Cartesian product | Validate join key uniqueness, switch join type |
+| `bad_join` | Row explosion / duplicate keys / Cartesian product / `DataQualityError` with `check=unique_key` or `check=row_count_ratio` | Validate join key uniqueness, switch join type |
 | `type_mismatch` | Cannot resolve / implicit cast error | Explicit `.cast()` on offending column |
 
 Unlike the other four categories, `oom` failures may appear as a platform-level process kill (exit code, no stack trace) rather than a Python/Spark exception — this matters for how the log-parser agent below must handle it.
@@ -20,13 +20,13 @@ Unlike the other four categories, `oom` failures may appear as a platform-level 
 
 **log-parser** — Takes the raw Databricks job run output (stdout/stderr, driver logs, stack traces) and extracts only the lines relevant to the failure: the exception type, the stack trace frames pointing into pipeline code, and any surrounding context (table/column names, partition info) needed to diagnose it. It does not interpret or classify the error — it only reduces noise so downstream agents work from a small, relevant excerpt instead of a full log dump.
 
-**classifier** — Takes the parsed log excerpt and maps it to exactly one of the five categories in the failure taxonomy above, using only the log signatures defined there. It does not perform free-form diagnosis or invent new failure categories — if the excerpt doesn't clearly match a known signature, it reports "unclassified" rather than guessing.
+**classifier** — Takes the parsed log excerpt and maps it to exactly one of the five categories in the failure taxonomy above, using only the log signatures defined there. It does not perform free-form diagnosis or invent new failure categories — if the excerpt doesn't clearly match a known signature, it reports "unclassified" rather than guessing. When the failure is a `DataQualityError`, it also cites the violated contract clause.
 
 **patch-proposer** — Takes the classified category and the parsed log excerpt, and fills in that category's template remediation with the specific identifiers found in the log (table name, column name, join key, etc.). It does not generate arbitrary code changes or attempt remediations outside the fixed template set — its output is always a filled-in instance of one of the five templates above.
 
 ## 4. Architecture Note
 
-`orchestrate.py` is the deterministic trigger for this system: it polls the Databricks Jobs API via the Databricks SDK on a fixed interval, detects failed runs, and kicks off the agent chain (log-parser → classifier → patch-proposer). It is a plain Python script, not a Claude Code hook — the polling loop and failure detection logic run independently of Claude Code's hook system.
+`src/self_healing/orchestrate.py` is the deterministic trigger for this system: it polls the Databricks Jobs API via the Databricks SDK on a fixed interval, detects failed runs, and kicks off the agent chain (log-parser → classifier → patch-proposer). It is a plain Python script, not a Claude Code hook — the polling loop and failure detection logic run independently of Claude Code's hook system.
 
 Claude Code hooks are used narrowly, for two things only:
 - **PreToolUse**: an approval gate that blocks `apply_patch` and `run_job` tool calls until explicitly approved, so no remediation is applied or job re-triggered without a human (or explicit policy) in the loop.
@@ -36,6 +36,6 @@ No other hook logic exists in this project; hooks are not used to drive orchestr
 
 ## 5. Conventions
 
-- **Python style**: standard library + `pyspark`/`pandas`/`databricks-sdk` only for now; PEP 8, type hints on function signatures, docstrings on modules and public functions.
+- **Python style**: standard library + `pyspark`/`pandas`/`databricks-sdk`/`pyyaml` (YAML data contracts in `contracts/`) only for now; PEP 8, type hints on function signatures, docstrings on modules and public functions.
 - **Commit messages**: Conventional Commits style (`feat:`, `fix:`, `docs:`, `chore:`, `scaffold:`), imperative mood, one logical change per commit.
-- **Evidence**: every diagnostic run's structured trail goes to `evidence/run_journal.jsonl` (one JSON object per line); raw/supporting logs go to `evidence/logs/`. Screenshots documenting the system in action go to `docs/screenshots/`.
+- **Evidence**: every diagnostic run's structured trail goes to `evidence/run_journal.jsonl` (one JSON object per line); raw/supporting logs go to `evidence/logs/`; run durations go to `evidence/run_history.json` (the Jobs API keeps runs only 60 days). Screenshots documenting the system in action go to `docs/screenshots/`.

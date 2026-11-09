@@ -11,23 +11,21 @@ diagnose-and-remediate loop:
 - run_job           — triggers a job and waits for it to finish
 
 All tools authenticate via DATABRICKS_HOST / DATABRICKS_TOKEN loaded from
-.env, the same pattern used in scripts/setup_databricks_jobs.py. job_name ->
-job_id resolution uses job_ids.json in the repo root, produced by that same
-script.
+.env. job_name -> job_id resolution looks the job up by its exact name in the
+workspace; the jobs themselves are declared in databricks.yml.
 
-Run standalone for local testing: python mcp_server/databricks_mcp.py
+Run standalone for local testing: python -m self_healing.mcp.databricks_mcp
 """
 
 from __future__ import annotations
 
 import difflib
-import json
 import os
 import re
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import OperationFailed
@@ -37,9 +35,7 @@ from mcp.server.fastmcp import FastMCP
 
 load_dotenv()
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-JOB_IDS_FILE = REPO_ROOT / "job_ids.json"
-GIT_FOLDER = "/Workspace/Users/<databricks-user>/self-healing-databricks-pipeline-multi-agent"
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # Strips terminal color codes out of Databricks error tracebacks so the text
 # handed to the log-parser agent is clean, not a wall of \x1b[...m sequences.
@@ -63,21 +59,23 @@ def _client() -> WorkspaceClient:
     return WorkspaceClient(host=host, token=token)
 
 
-def _load_job_ids() -> dict[str, int]:
-    if not JOB_IDS_FILE.exists():
-        raise FileNotFoundError(
-            f"{JOB_IDS_FILE} does not exist — run scripts/setup_databricks_jobs.py first "
-            "to register the pipeline jobs and generate this file."
+def _git_folder() -> str:
+    """Return the workspace Git folder path from DATABRICKS_GIT_FOLDER in .env."""
+    git_folder = os.environ.get("DATABRICKS_GIT_FOLDER", "").rstrip("/")
+    if not git_folder:
+        raise RuntimeError("DATABRICKS_GIT_FOLDER is not set. Add it to .env (see .env.example).")
+    return git_folder
+
+
+def _resolve_job_id(w: WorkspaceClient, job_name: str) -> int:
+    """Return the id of the one job with exactly this name; refuse zero or several."""
+    matches = [j.job_id for j in w.jobs.list(name=job_name) if j.settings and j.settings.name == job_name]
+    if len(matches) != 1:
+        raise ValueError(
+            f"Expected exactly one job named '{job_name}', found {len(matches)}. "
+            "Deploy the bundle first (make setup) or check the job name."
         )
-    return json.loads(JOB_IDS_FILE.read_text())
-
-
-def _resolve_job_id(job_name: str) -> int:
-    job_ids = _load_job_ids()
-    if job_name not in job_ids:
-        known = ", ".join(sorted(job_ids))
-        raise ValueError(f"Unknown job_name '{job_name}'. Known jobs: {known}")
-    return job_ids[job_name]
+    return matches[0]
 
 
 def _run_state_label(run: BaseRun) -> str:
@@ -93,10 +91,10 @@ def _run_state_label(run: BaseRun) -> str:
     return "UNKNOWN"
 
 
-def _epoch_ms_to_iso(ms: Optional[int]) -> Optional[str]:
+def _epoch_ms_to_iso(ms: int | None) -> str | None:
     if not ms:
         return None
-    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
+    return datetime.fromtimestamp(ms / 1000, tz=UTC).isoformat()
 
 
 def _run_git(*args: str) -> str:
@@ -118,8 +116,7 @@ def _run_git(*args: str) -> str:
 def list_runs(job_name: str, limit: int = 5) -> list[dict[str, Any]]:
     """List recent run summaries for a named Databricks job.
 
-    job_name is resolved to a job_id via job_ids.json in the repo root (the
-    file produced by scripts/setup_databricks_jobs.py).
+    job_name is resolved to a job_id by its exact name in the workspace.
 
     Returns each run's task-level run_id — not the parent job-level run_id —
     because get_run_output only accepts task-level run_ids (the Jobs API
@@ -127,8 +124,8 @@ def list_runs(job_name: str, limit: int = 5) -> list[dict[str, Any]]:
     this project runs a single spark_python_task per run). Feed this run_id
     straight into get_run_output.
     """
-    job_id = _resolve_job_id(job_name)
     w = _client()
+    job_id = _resolve_job_id(w, job_name)
     runs = list(w.jobs.list_runs(job_id=job_id, limit=limit, expand_tasks=True))
 
     summaries = []
@@ -203,7 +200,7 @@ def apply_patch(
     file_path: str,
     old_snippet: str,
     new_snippet: str,
-    category: Optional[str] = None,
+    category: str | None = None,
 ) -> dict[str, Any]:
     """Apply patch-proposer's diff-style output to a file, commit, push, and sync the workspace.
 
@@ -214,7 +211,7 @@ def apply_patch(
     On success: stages and commits the change ("fix: apply {category} patch
     to {file_path}", or "fix: apply patch to {file_path}" if category is
     omitted), pushes to origin, then calls the Databricks Repos API to pull
-    the new commit into the workspace Git folder at GIT_FOLDER so the
+    the new commit into the workspace Git folder at DATABRICKS_GIT_FOLDER so the
     workspace copy is synced without a manual UI step.
 
     The commit and push are not rolled back on any failure below them, so a
@@ -227,6 +224,7 @@ def apply_patch(
     "sync worked/didn't" field for the caller to remember to check. A
     successful return always means the workspace copy is confirmed in sync.
     """
+    git_folder = _git_folder()
     target = (REPO_ROOT / file_path).resolve()
     if REPO_ROOT not in target.parents:
         raise ValueError(f"{file_path} resolves outside the repo root — refusing to touch it")
@@ -266,7 +264,7 @@ def apply_patch(
     _run_git("push", "origin", branch)
 
     w = _client()
-    repo_status = w.workspace.get_status(GIT_FOLDER)
+    repo_status = w.workspace.get_status(git_folder)
     repo_id = repo_status.object_id
     w.repos.update(repo_id=repo_id, branch=branch)
     synced_repo = w.repos.get(repo_id=repo_id)
@@ -274,7 +272,7 @@ def apply_patch(
     if synced_repo.head_commit_id != commit_hash:
         raise RuntimeError(
             f"Workspace Git folder sync did not take: pushed {commit_hash} to origin/{branch}, "
-            f"but {GIT_FOLDER} (repo_id={repo_id}) is now at {synced_repo.head_commit_id} instead. "
+            f"but {git_folder} (repo_id={repo_id}) is now at {synced_repo.head_commit_id} instead. "
             "The commit and push already succeeded — this failure is the sync step only. "
             "Re-run the Databricks Repos update (or apply_patch's sync step) before triggering "
             "run_job, or the job will execute against stale workspace code."
@@ -287,7 +285,7 @@ def apply_patch(
         "commit_message": commit_message,
         "pushed_to": f"origin/{branch}",
         "workspace_sync": {
-            "git_folder": GIT_FOLDER,
+            "git_folder": git_folder,
             "synced_head_commit_id": synced_repo.head_commit_id,
             "matches_pushed_commit": True,
         },
@@ -298,7 +296,7 @@ def apply_patch(
 def run_job(job_name: str) -> dict[str, Any]:
     """Trigger a Databricks job and wait for it to reach a terminal state.
 
-    job_name is resolved to a job_id via job_ids.json. Waiting is bounded by
+    job_name is resolved to a job_id by its exact name. Waiting is bounded by
     RUN_JOB_TIMEOUT (15 minutes — see its definition for reasoning); if the
     run hasn't reached a terminal state by then, the SDK's waiter raises
     TimeoutError rather than this tool hanging indefinitely.
@@ -326,8 +324,8 @@ def run_job(job_name: str) -> dict[str, Any]:
     run_now/get_run report at the job level. Feed this run_id straight into
     get_run_output.
     """
-    job_id = _resolve_job_id(job_name)
     w = _client()
+    job_id = _resolve_job_id(w, job_name)
     waiter = w.jobs.run_now(job_id=job_id)
     run_id = waiter.run_id
     try:

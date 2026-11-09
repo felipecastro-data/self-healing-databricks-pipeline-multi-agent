@@ -24,21 +24,17 @@ function call. The comparison itself remains semantically meaningless
 (price vs. a date-derived number) — this scenario only exercises the
 type-mismatch failure/remediation path, not real business logic.
 
-Writes to self_healing_demo.pipeline.orders_summary_type_mismatch.
-
-Runs as a standalone Databricks job (not a notebook). `spark` is injected
-into the global namespace by the job cluster's runtime context; do not
-import or instantiate a SparkSession here.
+Writes to <schema>.orders_summary_type_mismatch.
 """
 
+from __future__ import annotations
+
+from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-SOURCE_TABLE = "self_healing_demo.pipeline.orders_raw"
-TARGET_TABLE = "self_healing_demo.pipeline.orders_summary_type_mismatch"
 
-
-def run() -> None:
-    orders = spark.table(SOURCE_TABLE)
+def run(spark: SparkSession, schema: str) -> None:
+    orders = spark.table(f"{schema}.orders_raw")
 
     # Fix: o_orderdate has no direct cast to decimal, so it's chained through
     # timestamp -> long (epoch seconds) -> decimal(18,2), a Spark-supported
@@ -54,8 +50,4 @@ def run() -> None:
         F.count("o_orderkey").alias("order_count"),
     )
 
-    summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
-
-
-if __name__ == "__main__":
-    run()
+    summary.write.mode("overwrite").saveAsTable(f"{schema}.orders_summary_type_mismatch")

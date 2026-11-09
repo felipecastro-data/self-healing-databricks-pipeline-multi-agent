@@ -8,8 +8,9 @@ memory at once instead of processing it distributed — exactly what triggers
 OutOfMemoryError / executor lost / spill warnings on a real cluster.
 
 NOTE — documented, expected behavior difference, not a bug: orders_raw in
-this workspace is a small demo table (~5k rows), so a classic driver
-OutOfMemoryError may not always reproduce, and on Databricks Free Edition
+this workspace held 5,000 rows when the evidence in evidence/logs/ was
+captured, so a classic driver OutOfMemoryError may not always reproduce, and
+on Databricks Free Edition
 serverless compute in particular, the failure is more likely to surface as a
 query timeout or a resource/size-limit error from the serverless compute
 manager rather than a literal java.lang.OutOfMemoryError from a driver JVM.
@@ -20,19 +21,16 @@ recognize serverless resource-limit/timeout messages in this environment.
 
 Writes nothing on the expected failure path — self_healing_demo.pipeline.
 orders_summary_oom is only written if the collect() somehow completes.
-
-Runs as a standalone Databricks job (not a notebook). `spark` is injected
-into the global namespace by the job cluster's runtime context; do not
-import or instantiate a SparkSession here.
 """
 
-SOURCE_TABLE = "self_healing_demo.pipeline.orders_raw"
-TARGET_TABLE = "self_healing_demo.pipeline.orders_summary_oom"
+from __future__ import annotations
+
+from pyspark.sql import SparkSession
 
 
-def run() -> None:
-    orders = spark.table(SOURCE_TABLE)
-    other = spark.table(SOURCE_TABLE)
+def run(spark: SparkSession, schema: str) -> None:
+    orders = spark.table(f"{schema}.orders_raw")
+    other = spark.table(f"{schema}.orders_raw")
 
     # Defect: no join key at all -> full Cartesian product, growing as
     # row_count(orders) * row_count(other) instead of a bounded 1:1 match.
@@ -50,8 +48,4 @@ def run() -> None:
     # limit) first. Kept only so the script has a defined "if it somehow
     # completes" path, per the scenario spec.
     result_df = spark.createDataFrame(collected_rows, cartesian.schema)
-    result_df.write.mode("overwrite").saveAsTable(TARGET_TABLE)
-
-
-if __name__ == "__main__":
-    run()
+    result_df.write.mode("overwrite").saveAsTable(f"{schema}.orders_summary_oom")

@@ -1,37 +1,35 @@
-"""golden_job.py — reference "happy path" pipeline job for the self-healing pipeline demo.
+"""golden_job.py: the known-good job every broken scenario deliberately deviates from.
 
-Reads the raw orders table (self_healing_demo.pipeline.orders_raw), aggregates
-total order value and order count per customer, and writes the result to
-self_healing_demo.pipeline.orders_summary (overwrite mode).
+Aggregates order value and order count per customer from <schema>.orders_raw
+and overwrites <schema>.orders_summary. The input and output are both checked
+against their contracts in contracts/ before anything is written.
 
-Every script under pipelines/broken_scenarios/ is a deliberate, documented
-deviation from this exact logic — each one injects exactly one defect that
-produces a log signature matching one row of the failure taxonomy in
-CLAUDE.md.
-
-Runs as a standalone Databricks job (not a notebook). `spark` is injected
-into the global namespace by the job cluster's runtime context; do not
-import or instantiate a SparkSession here.
+Every module in broken_scenarios/ injects exactly one defect that produces a
+log signature from the failure taxonomy in CLAUDE.md.
 """
 
+from __future__ import annotations
+
+from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-SOURCE_TABLE = "self_healing_demo.pipeline.orders_raw"
-TARGET_TABLE = "self_healing_demo.pipeline.orders_summary"
+from self_healing.jobs.contract import load_contract, validate_contract
+from self_healing.jobs.json_log import get_logger
 
-# Reference baseline: the known-good pipeline every broken_scenarios/*.py deliberately deviates from.
+LOG = get_logger(__name__)
 
 
-def run() -> None:
-    orders = spark.table(SOURCE_TABLE)
+def run(spark: SparkSession, schema: str) -> None:
+    """Validate orders_raw, aggregate it, validate the result, and write it."""
+    target_table = f"{schema}.orders_summary"
+    orders = spark.table(f"{schema}.orders_raw")
+    validate_contract(orders, load_contract("orders_raw"))
 
     summary = orders.groupBy("o_custkey").agg(
         F.sum("o_totalprice").alias("total_value"),
         F.count("o_orderkey").alias("order_count"),
     )
+    validate_contract(summary, load_contract("orders_summary"))
 
-    summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
-
-
-if __name__ == "__main__":
-    run()
+    summary.write.mode("overwrite").saveAsTable(target_table)
+    LOG.info("written", extra={"fields": {"target": target_table}})

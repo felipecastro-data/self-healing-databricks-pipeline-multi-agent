@@ -1,0 +1,9 @@
+# Data contract for the per-customer order summary written by the jobs.
+name: orders_summary
+version: 1
+source: orders_raw
+columns:
+  o_custkey: {type: bigint, nullable: false}
+  total_value: {type: "decimal(28,2)", nullable: false}
+  order_count: {type: bigint, nullable: false}
+primary_key: [o_custkey]
