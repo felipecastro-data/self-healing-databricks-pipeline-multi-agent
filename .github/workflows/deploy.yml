@@ -1,0 +1,40 @@
+# Promotes the job definitions dev -> prod. Prod waits for approval on the
+# GitHub "prod" environment. Requires repository secrets DATABRICKS_HOST and
+# DATABRICKS_TOKEN, and repository variables DATABRICKS_GIT_FOLDER and
+# DATABRICKS_GIT_FOLDER_PROD. Does nothing until those variables are set.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+  DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+jobs:
+  dev:
+    if: ${{ vars.DATABRICKS_GIT_FOLDER != '' }}
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_VAR_git_folder: ${{ vars.DATABRICKS_GIT_FOLDER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.25.0
+      - run: databricks bundle validate -t dev
+      - run: databricks bundle deploy -t dev
+      - run: databricks repos update "$BUNDLE_VAR_git_folder" --branch main
+
+  prod:
+    needs: dev
+    if: ${{ vars.DATABRICKS_GIT_FOLDER_PROD != '' }}
+    runs-on: ubuntu-latest
+    environment: prod
+    env:
+      BUNDLE_VAR_git_folder: ${{ vars.DATABRICKS_GIT_FOLDER_PROD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.25.0
+      - run: databricks bundle validate -t prod
+      - run: databricks bundle deploy -t prod
+      - run: databricks repos update "$BUNDLE_VAR_git_folder" --branch main
