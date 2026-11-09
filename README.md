@@ -278,11 +278,11 @@ ruff check .
 pytest
 ```
 
-**Deployment.** [`deploy.yml`](.github/workflows/deploy.yml) validates and deploys to `dev` on every push to `main`, and `prod` waits for approval on a GitHub `prod` environment. It needs the repository secrets `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_GIT_FOLDER` and `DATABRICKS_GIT_FOLDER_PROD`. Each job stays inactive until the repository variable `DEPLOY_DEV` or `DEPLOY_PROD` is `true`. The Git folder paths are secrets, and the workspace user name is masked, because Actions logs are public on a public repo and contain the Databricks user's email otherwise.
+**Deployment.** [`deploy.yml`](.github/workflows/deploy.yml) validates and deploys to `dev` on every push to `main`, and `prod` waits for approval on a GitHub `prod` environment. It needs the repository secrets `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_GIT_FOLDER` and `DATABRICKS_GIT_FOLDER_PROD`. Each job stays inactive until the repository variable `DEPLOY_DEV` or `DEPLOY_PROD` is `true`. The Git folder paths are secrets, and the workspace user name is masked, because Actions logs are public on a public repo and contain the Databricks user's email otherwise. The first run, on 2026-11-09, deployed both targets, and its log contained neither the email nor the workspace host. `prod` reads and writes its own schema, `self_healing_demo.pipeline_prod`, and its ingest loaded the same 7,500,000 rows. Dev and prod share one workspace, and none of the scenario jobs has been run in `prod`.
 
 ### Known limitations
 
-- **Not everything has run end to end.** The jobs and contracts ran on Databricks, and the MCP server and each agent ran for real. `make demo` hasn't been run on the current code. `deploy.yml` has never run, and the `prod` target has been validated but never deployed.
+- **`make demo` hasn't finished on the current code.** It ran the job and fetched the failure, then stopped when the headless agent step hit an expired Claude login. The agents themselves were run from an interactive session, on the output saved from the same kind of failure.
 - **`oom` wasn't re-run at 7.5 million rows.** The job is unbounded on purpose and now has a 15-minute timeout. Its log signature also depends on the environment.
 - **One job at a time, triggered by hand.** See the [design notes](docs/design.md#scalability) for what continuous detection would need.
 - **`apply_patch` can edit any file in the repo and pushes the whole branch.** The approval gate is the only control over which file it touches.
