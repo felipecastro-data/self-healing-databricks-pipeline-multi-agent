@@ -5,10 +5,12 @@ out total_value for every customer with 3 or fewer orders (as if an upstream
 enrichment step — e.g. a currency-conversion lookup — silently failed for
 those rows; the real source data has no nulls in o_totalprice, this null is
 injected here). contracts/orders_summary.yml declares total_value not
-nullable, so the job stops before writing with a DataQualityError citing
-clause columns.total_value.not_null. Behind that check the target Delta
-table still has its NOT NULL constraint; before the contract existed, this
-job failed at the write with "[DELTA_NOT_NULL_CONSTRAINT_VIOLATED]" (see
+nullable. Until the fix was applied, the job stopped before writing with a
+DataQualityError citing clause columns.total_value.not_null (see
+evidence/logs/null_violation_contract_before.txt). The fix drops those rows
+before validating. Behind that check the target Delta table still has its
+NOT NULL constraint; before the contract existed, this job failed at the
+write with "[DELTA_NOT_NULL_CONSTRAINT_VIOLATED]" (see
 evidence/logs/null_violation_before.txt).
 
 This matches the `null_violation` row of the failure taxonomy in CLAUDE.md.
