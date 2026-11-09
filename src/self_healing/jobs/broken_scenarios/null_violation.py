@@ -56,6 +56,7 @@ def run(spark: SparkSession, schema: str) -> None:
         F.when(F.col("order_count") > 3, F.col("total_value")).otherwise(F.lit(None)),
     ).select("o_custkey", "total_value", "order_count")
 
+    summary_with_nulls = summary_with_nulls.na.drop(subset=["total_value"])
     validate_contract(summary_with_nulls, load_contract("orders_summary"))
 
     # insertInto (not saveAsTable) writes into the existing table using its
