@@ -74,18 +74,23 @@ def test_ingest_validates_and_writes(spark, orders):
     assert [r.o_orderkey for r in spark.table(f"{SCHEMA}.orders_raw").collect()] == [9]
 
 
-def test_contract_drift_scenario_breaches_contract(spark, orders):
-    with pytest.raises(DataQualityError) as err:
-        contract_drift.run(spark, SCHEMA)
-    assert err.value.clause == "columns.o_totalprice.present"
+def test_contract_drift_fix_restores_the_contracted_column(spark, orders):
+    contract_drift.run(spark, SCHEMA)
+    assert spark.table(f"{SCHEMA}.orders_summary_contract_drift").count() == 2
 
 
-def test_null_violation_scenario_breaches_output_contract(spark, orders, monkeypatch):
-    # The target table is Delta, which local Spark lacks; the contract stops the job before it's written.
+def test_null_violation_fix_drops_null_totals(spark, monkeypatch):
+    frame = spark.createDataFrame([_row(key) for key in range(1, 5)] + [_row(5, cust=2)], DDL)
+    frame.write.mode("overwrite").saveAsTable(f"{SCHEMA}.orders_raw")
+    # The real target table is Delta, which local Spark lacks.
+    target = f"{SCHEMA}.orders_summary_null_violation"
+    spark.sql(
+        f"CREATE TABLE IF NOT EXISTS {target} "
+        "(o_custkey BIGINT, total_value DECIMAL(18,2), order_count BIGINT) USING PARQUET"
+    )
     monkeypatch.setattr(null_violation, "ensure_target_table", lambda *args: None)
-    with pytest.raises(DataQualityError) as err:
-        null_violation.run(spark, SCHEMA)
-    assert err.value.clause == "columns.total_value.not_null"
+    null_violation.run(spark, SCHEMA)
+    assert [row.o_custkey for row in spark.table(target).collect()] == [1]
 
 
 def test_bad_join_dedup_prevents_explosion(spark, orders):
