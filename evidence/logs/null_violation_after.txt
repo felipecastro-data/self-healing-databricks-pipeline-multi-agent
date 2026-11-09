@@ -1,0 +1,5 @@
+[null_violation] run_id: 324196497279350
+[null_violation] job_run_id: 1032821675400141
+[null_violation] state: SUCCESS
+[null_violation] run_page_url: https://<workspace-host>/?o=7474651959882501#job/919564607688236/run/1032821675400141
+[null_violation] get_run_output: (no error/output text for this run — it may have succeeded, or its output is a notebook/SQL/dashboard result type this tool doesn't parse)

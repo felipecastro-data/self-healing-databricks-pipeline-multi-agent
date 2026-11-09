@@ -1,9 +1,10 @@
 """broken_scenarios/contract_drift.py: failure taxonomy category: schema_drift.
 
 Simulates an upstream rename of o_totalprice to o_total_price. The job checks
-its input against contracts/orders_raw.yml before doing any work, so the drift
-stops the run as a contract breach (clause columns.o_totalprice.present)
-instead of surfacing later as an unresolved-column error.
+its input against contracts/orders_raw.yml before doing any work. Until the
+fix was applied, the drift stopped the run as a contract breach (clause
+columns.o_totalprice.present); see evidence/logs/contract_drift_before.txt.
+The fix maps the column back to its contracted name before validating.
 """
 
 from __future__ import annotations
@@ -15,13 +16,14 @@ from self_healing.jobs.contract import load_contract, validate_contract
 
 
 def run(spark: SparkSession, schema: str) -> None:
-    """Rename a contracted column, then validate. The validation is expected to fail."""
+    """Rename a contracted column, map it back, validate, and write the summary."""
     # Defect: stands in for an upstream producer renaming a contracted column.
     orders = spark.table(f"{schema}.orders_raw").withColumnRenamed("o_totalprice", "o_total_price")
+    orders = orders.withColumnRenamed("o_total_price", "o_totalprice")
     validate_contract(orders, load_contract("orders_raw"))
 
     summary = orders.groupBy("o_custkey").agg(
-        F.sum("o_total_price").alias("total_value"),
+        F.sum("o_totalprice").alias("total_value"),
         F.count("o_orderkey").alias("order_count"),
     )
     summary.write.mode("overwrite").saveAsTable(f"{schema}.orders_summary_contract_drift")
