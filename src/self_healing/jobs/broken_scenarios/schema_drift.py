@@ -1,7 +1,7 @@
 """broken_scenarios/schema_drift.py — failure taxonomy category: schema_drift.
 
 Originally referenced o_customer_email, a column that does not exist on
-self_healing_demo.pipeline.orders_raw (verified against the live table
+<schema>.orders_raw (verified against the live table
 schema — orders_raw has no email column). Referencing it unconditionally
 raised an AnalysisException at DataFrame-resolution time
 ("UNRESOLVED_COLUMN.WITH_SUGGESTION" — the modern spelling of the classic
@@ -21,39 +21,39 @@ run back through the full diagnostic chain with patch-proposer explicitly
 told the assert-only fix was cosmetic and ruled out. The result branches
 on the table's actual schema instead of asserting a fixed shape: if
 o_customer_email is present it's used as before, and if absent the job
-prints an explicit `[schema_drift] WARNING: ...` line (visible in the
-job's captured output, not a silent fallback) and continues with
+logs an explicit warning (visible in the job's captured output, not a
+silent fallback) and continues with
 customer_email set to NULL for all rows. The job now completes
 successfully against this workspace's current orders_raw, which has no
 email column.
 
-Writes to self_healing_demo.pipeline.orders_summary_schema_drift.
-
-Runs as a standalone Databricks job (not a notebook). `spark` is injected
-into the global namespace by the job cluster's runtime context; do not
-import or instantiate a SparkSession here.
+Writes to <schema>.orders_summary_schema_drift.
 """
 
+from __future__ import annotations
+
+from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-SOURCE_TABLE = "self_healing_demo.pipeline.orders_raw"
-TARGET_TABLE = "self_healing_demo.pipeline.orders_summary_schema_drift"
+from self_healing.jobs.json_log import get_logger
+
+LOG = get_logger(__name__)
 
 
-def run() -> None:
-    orders = spark.table(SOURCE_TABLE)
+def run(spark: SparkSession, schema: str) -> None:
+    orders = spark.table(f"{schema}.orders_raw")
 
     # Fix: o_customer_email does not exist in orders_raw. Rather than assert
     # it must be present (which only renamed the exception without resolving
     # the drift), branch on the table's actual schema so the job proceeds —
-    # falling back to a NULL customer_email, with an explicit warning printed
+    # falling back to a NULL customer_email, with an explicit warning logged
     # so the degradation is visible in the job's output/logs.
     if "o_customer_email" in orders.columns:
         enriched = orders.withColumn("customer_email", F.col("o_customer_email"))
     else:
-        print(
-            f"[schema_drift] WARNING: column 'o_customer_email' not found in {SOURCE_TABLE} "
-            f"(available columns: {orders.columns}); setting customer_email to NULL for all rows"
+        LOG.warning(
+            "missing_column_filled_with_null",
+            extra={"fields": {"column": "o_customer_email", "available": orders.columns}},
         )
         enriched = orders.withColumn("customer_email", F.lit(None))
 
@@ -62,8 +62,4 @@ def run() -> None:
         F.count("o_orderkey").alias("order_count"),
     )
 
-    summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
-
-
-if __name__ == "__main__":
-    run()
+    summary.write.mode("overwrite").saveAsTable(f"{schema}.orders_summary_schema_drift")
