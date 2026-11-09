@@ -187,5 +187,26 @@
     "start_time": "2026-11-09T14:33:25Z",
     "result_state": "SUCCESS",
     "run_duration_s": 30
+  },
+  {
+    "job_name": "self-healing-contract-drift",
+    "job_run_id": 918400552165520,
+    "start_time": "2026-11-09T15:53:31Z",
+    "result_state": "FAILED",
+    "run_duration_s": 73
+  },
+  {
+    "job_name": "self-healing-contract-drift",
+    "job_run_id": 962630194267105,
+    "start_time": "2026-11-09T16:01:38Z",
+    "result_state": "FAILED",
+    "run_duration_s": 61
+  },
+  {
+    "job_name": "self-healing-contract-drift",
+    "job_run_id": 309459073047402,
+    "start_time": "2026-11-09T16:06:45Z",
+    "result_state": "FAILED",
+    "run_duration_s": 29
   }
 ]
