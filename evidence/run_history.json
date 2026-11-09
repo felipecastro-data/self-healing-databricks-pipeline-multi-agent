@@ -1,0 +1,142 @@
+[
+  {
+    "job_name": "self-healing-golden-job",
+    "job_run_id": 96759907308312,
+    "start_time": "2026-09-09T17:02:49Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 60
+  },
+  {
+    "job_name": "self-healing-schema-drift",
+    "job_run_id": 473287998921949,
+    "start_time": "2026-09-09T17:06:58Z",
+    "result_state": "FAILED",
+    "run_duration_s": 41
+  },
+  {
+    "job_name": "self-healing-null-violation",
+    "job_run_id": 487721993521826,
+    "start_time": "2026-09-09T18:48:00Z",
+    "result_state": "FAILED",
+    "run_duration_s": 90
+  },
+  {
+    "job_name": "self-healing-bad-join",
+    "job_run_id": 93230342184660,
+    "start_time": "2026-09-09T18:54:01Z",
+    "result_state": "FAILED",
+    "run_duration_s": 43
+  },
+  {
+    "job_name": "self-healing-type-mismatch",
+    "job_run_id": 681744601198839,
+    "start_time": "2026-09-09T18:57:11Z",
+    "result_state": "FAILED",
+    "run_duration_s": 40
+  },
+  {
+    "job_name": "self-healing-oom",
+    "job_run_id": 257418531225806,
+    "start_time": "2026-09-09T18:58:46Z",
+    "result_state": "FAILED",
+    "run_duration_s": 812
+  },
+  {
+    "job_name": "self-healing-golden-job",
+    "job_run_id": 894046518123378,
+    "start_time": "2026-09-14T20:58:36Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 57
+  },
+  {
+    "job_name": "self-healing-schema-drift",
+    "job_run_id": 1003521720573681,
+    "start_time": "2026-09-14T21:27:53Z",
+    "result_state": "FAILED",
+    "run_duration_s": 61
+  },
+  {
+    "job_name": "self-healing-schema-drift",
+    "job_run_id": 1055626320842794,
+    "start_time": "2026-09-14T21:30:19Z",
+    "result_state": "FAILED",
+    "run_duration_s": 40
+  },
+  {
+    "job_name": "self-healing-schema-drift",
+    "job_run_id": 18785824897029,
+    "start_time": "2026-09-14T21:45:51Z",
+    "result_state": "FAILED",
+    "run_duration_s": 39
+  },
+  {
+    "job_name": "self-healing-bad-join",
+    "job_run_id": 134405507566492,
+    "start_time": "2026-09-15T16:22:47Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 71
+  },
+  {
+    "job_name": "self-healing-type-mismatch",
+    "job_run_id": 119740999980730,
+    "start_time": "2026-09-16T19:48:57Z",
+    "result_state": "FAILED",
+    "run_duration_s": 67
+  },
+  {
+    "job_name": "self-healing-type-mismatch",
+    "job_run_id": 446052669156260,
+    "start_time": "2026-09-16T19:51:49Z",
+    "result_state": "FAILED",
+    "run_duration_s": 40
+  },
+  {
+    "job_name": "self-healing-type-mismatch",
+    "job_run_id": 716710776520888,
+    "start_time": "2026-09-16T20:35:25Z",
+    "result_state": "FAILED",
+    "run_duration_s": 52
+  },
+  {
+    "job_name": "self-healing-type-mismatch",
+    "job_run_id": 239715506247208,
+    "start_time": "2026-09-16T21:10:25Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 66
+  },
+  {
+    "job_name": "self-healing-schema-drift",
+    "job_run_id": 986542419728766,
+    "start_time": "2026-09-16T23:41:45Z",
+    "result_state": "FAILED",
+    "run_duration_s": 39
+  },
+  {
+    "job_name": "self-healing-schema-drift",
+    "job_run_id": 136884512224437,
+    "start_time": "2026-09-16T23:47:15Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 36
+  },
+  {
+    "job_name": "self-healing-golden-job",
+    "job_run_id": 128926416008157,
+    "start_time": "2026-09-17T00:36:39Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 59
+  },
+  {
+    "job_name": "self-healing-golden-job",
+    "job_run_id": 599329680821151,
+    "start_time": "2026-09-17T00:43:36Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 22
+  },
+  {
+    "job_name": "self-healing-golden-job",
+    "job_run_id": 901275080104878,
+    "start_time": "2026-09-17T02:14:09Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 62
+  }
+]
