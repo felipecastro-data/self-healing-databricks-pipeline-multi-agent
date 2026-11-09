@@ -27,11 +27,18 @@ Diagnosis time runs from log-parser finishing to patch-proposer finishing. Time 
 
 | Job | Last failure before first success | First success | Latest run |
 |---|---:|---:|---|
+| `prod-self-healing-bad-join` | n/a | n/a | SUCCESS, 36 s |
+| `prod-self-healing-contract-drift` | 74 s | n/a | FAILED, 74 s |
+| `prod-self-healing-ingest-orders-raw` | n/a | n/a | SUCCESS, 50 s |
+| `prod-self-healing-null-violation` | 85 s | n/a | FAILED, 85 s |
+| `prod-self-healing-oom` | n/a | n/a | TIMEDOUT, 931 s |
+| `prod-self-healing-schema-drift` | n/a | n/a | SUCCESS, 33 s |
+| `prod-self-healing-type-mismatch` | n/a | n/a | SUCCESS, 40 s |
 | `self-healing-bad-join` | 43 s | 71 s | SUCCESS, 37 s |
-| `self-healing-contract-drift` | 29 s | n/a | FAILED, 29 s |
+| `self-healing-contract-drift` | 29 s | 58 s | SUCCESS, 58 s |
 | `self-healing-golden-job` | n/a | n/a | SUCCESS, 39 s |
 | `self-healing-ingest-orders-raw` | n/a | n/a | SUCCESS, 64 s |
-| `self-healing-null-violation` | 61 s | n/a | FAILED, 61 s |
-| `self-healing-oom` | 812 s | n/a | FAILED, 812 s |
+| `self-healing-null-violation` | 61 s | 57 s | SUCCESS, 57 s |
+| `self-healing-oom` | 812 s | n/a | TIMEDOUT, 940 s |
 | `self-healing-schema-drift` | 39 s | 36 s | SUCCESS, 37 s |
 | `self-healing-type-mismatch` | 52 s | 66 s | SUCCESS, 30 s |
