@@ -6,12 +6,12 @@ File ~/.ipykernel/2652/command--1-2616493043:8
       7 with open(filename, "rb") as f:
 ----> 8   exec(compile(f.read(), filename, 'exec'))
 
-File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/bad_join.py:69
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/bad_join.py:69
      65     summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
      68 if __name__ == "__main__":
 ---> 69     run()
 
-File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/bad_join.py:55, in run()
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/bad_join.py:55, in run()
      51 print(f"[bad_join] explosion factor: {output_count / input_count:.1f}x")
      53 # Databricks won't fail this join on its own, so make the row-count
      54 # explosion a hard job failure with an explicit signature.

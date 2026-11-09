@@ -1,0 +1,17 @@
+# Data contract for the raw orders table.
+# Clauses are cited as columns.<name>.present, columns.<name>.type,
+# columns.<name>.not_null and primary_key.unique.
+name: orders_raw
+version: 1
+source: samples.tpch.orders
+columns:
+  o_orderkey: {type: bigint, nullable: false}
+  o_custkey: {type: bigint, nullable: false}
+  o_orderstatus: {type: string, nullable: false}
+  o_totalprice: {type: "decimal(18,2)", nullable: false}
+  o_orderdate: {type: date, nullable: false}
+  o_orderpriority: {type: string}
+  o_clerk: {type: string}
+  o_shippriority: {type: int}
+  o_comment: {type: string}
+primary_key: [o_orderkey]

@@ -14,6 +14,7 @@ Two things, produced by the upstream agents in the chain:
    ```
    Classification: <one of: schema_drift | null_violation | oom | bad_join | type_mismatch | unclassified>
    Matched signature: <phrase from the taxonomy, or "none">
+   Contract clause: <clause from a DataQualityError, or "none">
    ```
 2. The `log-parser` agent's structured excerpt for the same failure:
    ```
@@ -28,7 +29,7 @@ You do not receive raw logs and do not re-diagnose the failure. The classificati
 
 ## Task
 
-Fill in **exactly one** of the five fixed remediation templates below — the one matching the given classification — using specifics pulled from the log-parser excerpt: table/column/join-key names from "Identifiers mentioned", and the file:line to target from "Relevant frames".
+Fill in **exactly one** of the five fixed remediation templates below — the one matching the given classification — using specifics pulled from the log-parser excerpt: table/column/join-key names from "Identifiers mentioned", and the file:line to target from "Relevant frames". A contract clause such as `columns.total_value.not_null` names the offending column.
 
 ### The five templates (restated verbatim from CLAUDE.md section 2 — no drift)
 
@@ -93,15 +94,15 @@ If you notice yourself about to write a sentence that isn't part of `Category:`,
 
 ### Note for downstream automation
 
-`orchestrate.py` does not parse or gate on this output today — it hands the raw run log to a headless Claude Code session that invokes this agent chain and prints whatever comes back, then stops. If a future consumer needs a machine-parseable field from this output (e.g. the category, to log or gate on), extract it deterministically — e.g. a regex on the `Category:` line — rather than relying on this agent's self-formatting being perfect every time.
+`orchestrate.py` does not parse or gate on this output — it prints whatever the chain returns and stops. `self_healing/journal.py` reads the `Target:` line and the classifier's labels with regexes when building the results report, rather than relying on this agent's self-formatting being perfect every time.
 
 ### Example (correctly formatted output, null_violation case)
 
-Given `Classification: null_violation` and a log-parser excerpt whose identifiers are `column o_comment (nullable violation on write to orders_clean)` and whose relevant frame is `pipelines/broken_scenarios/null_violation.py:41 — orders_clean.write.saveAsTable("orders_clean")`, the ENTIRE response should be:
+Given `Classification: null_violation` and a log-parser excerpt whose identifiers are `column o_comment (nullable violation on write to orders_clean)` and whose relevant frame is `src/self_healing/jobs/broken_scenarios/null_violation.py:41 — orders_clean.write.saveAsTable("orders_clean")`, the ENTIRE response should be:
 
 ```
 Category: null_violation
-Target: pipelines/broken_scenarios/null_violation.py:41
+Target: src/self_healing/jobs/broken_scenarios/null_violation.py:41
 Patch:
 - orders_clean.write.saveAsTable("orders_clean")
 + orders_clean.na.drop(subset=["o_comment"]).write.saveAsTable("orders_clean")

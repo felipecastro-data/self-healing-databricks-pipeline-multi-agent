@@ -8,12 +8,12 @@ File ~/.ipykernel/2763/command--1-467684064:8
       7 with open(filename, "rb") as f:
 ----> 8   exec(compile(f.read(), filename, 'exec'))
 
-File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/schema_drift.py:43
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/schema_drift.py:43
      39     summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
      42 if __name__ == "__main__":
 ---> 43     run()
 
-File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/schema_drift.py:34, in run()
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/schema_drift.py:34, in run()
      30 # Defect: o_customer_email does not exist in orders_raw. Referencing it
      31 # raises AnalysisException as soon as it's resolved below.
      32 enriched = orders.withColumn("customer_email", F.col("o_customer_email"))

@@ -7,12 +7,12 @@ File ~/.ipykernel/2640/command--1-593827164:8
       7 with open(filename, "rb") as f:
 ----> 8   exec(compile(f.read(), filename, 'exec'))
 
-File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/null_violation.py:67
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/null_violation.py:67
      63     summary_with_nulls.write.insertInto(TARGET_TABLE, overwrite=True)
      66 if __name__ == "__main__":
 ---> 67     run()
 
-File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/null_violation.py:63, in run()
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/null_violation.py:63, in run()
      54 summary_with_nulls = summary.withColumn(
      55     "total_value",
      56     F.when(F.col("order_count") > 3, F.col("total_value")).otherwise(F.lit(None)),

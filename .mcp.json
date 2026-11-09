@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "databricks-self-healing-pipeline": {
-      "command": "python3",
-      "args": ["mcp_server/databricks_mcp.py"]
+      "command": "venv/bin/python",
+      "args": ["-m", "self_healing.mcp.databricks_mcp"]
     }
   }
 }

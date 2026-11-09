@@ -1,0 +1,51 @@
+DataQualityError: check=not_null contract=orders_summary clause=columns.total_value.not_null detail=null_rows=2521
+[Trace ID: 00-2e34643d71f66e335b325d6662f3d55b-ad73b4cd848e3b27-00]
+---------------------------------------------------------------------------
+DataQualityError                          Traceback (most recent call last)
+File ~/.ipykernel/2731/command--1-759763089:8
+      5 del sys
+      7 with open(filename, "rb") as f:
+----> 8   exec(compile(f.read(), filename, 'exec'))
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/databricks_entry.py:31
+     27     importlib.import_module(f"self_healing.jobs.{args.job}").run(session, args.schema)
+     30 if __name__ == "__main__":
+---> 31     main(spark)
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/databricks_entry.py:27, in main(session)
+     24 args = parser.parse_args()
+     26 sys.path.insert(0, args.src)
+---> 27 importlib.import_module(f"self_healing.jobs.{args.job}").run(session, args.schema)
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/self_healing/jobs/broken_scenarios/null_violation.py:59, in run(spark, schema)
+     51 # Defect: simulate a broken upstream enrichment step that nulls out
+     52 # total_value for low-order-count customers. Column order below must
+     53 # stay aligned with the target table's column order for insertInto.
+     54 summary_with_nulls = summary.withColumn(
+     55     "total_value",
+     56     F.when(F.col("order_count") > 3, F.col("total_value")).otherwise(F.lit(None)),
+     57 ).select("o_custkey", "total_value", "order_count")
+---> 59 validate_contract(summary_with_nulls, load_contract("orders_summary"))
+     61 # insertInto (not saveAsTable) writes into the existing table using its
+     62 # existing schema, so the NOT NULL constraint created above is actually
+     63 # enforced. saveAsTable("overwrite") would instead recreate the table
+     64 # from the DataFrame's schema and silently drop the constraint.
+     65 summary_with_nulls.write.insertInto(target_table, overwrite=True)
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/self_healing/jobs/contract.py:37, in validate_contract(df, contract)
+     30 key = contract["primary_key"]
+     31 row = df.agg(
+     32     F.count(F.lit(1)).alias("__total"),
+     33     F.countDistinct(*key).alias("__distinct"),
+     34     *[(F.count(F.lit(1)) - F.count(column)).alias(f"__nulls_{column}") for column in not_null],
+     35 ).first()
+---> 37 check_not_null({column: row[f"__nulls_{column}"] for column in not_null}, name)
+     38 check_unique_key(row["__total"], row["__distinct"], "primary_key.unique", name)
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/self_healing/jobs/checks.py:45, in check_not_null(null_counts, contract)
+     43 for name, count in null_counts.items():
+     44     if count > 0:
+---> 45         raise DataQualityError("not_null", f"columns.{name}.not_null", f"null_rows={count}", contract)
+
+DataQualityError: check=not_null contract=orders_summary clause=columns.total_value.not_null detail=null_rows=2521
+Workload failed, see run output for details

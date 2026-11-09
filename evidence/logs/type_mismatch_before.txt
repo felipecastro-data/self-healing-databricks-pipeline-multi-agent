@@ -8,12 +8,12 @@ File ~/.ipykernel/3308/command--1-3187812903:8
       7 with open(filename, "rb") as f:
 ----> 8   exec(compile(f.read(), filename, 'exec'))
 
-File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/type_mismatch.py:49
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/type_mismatch.py:49
      45     summary.write.mode("overwrite").saveAsTable(TARGET_TABLE)
      48 if __name__ == "__main__":
 ---> 49     run()
 
-File /Workspace/Users/felipe9393@icloud.com/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/type_mismatch.py:40, in run()
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/pipelines/broken_scenarios/type_mismatch.py:40, in run()
      31 # Defect: comparing a DECIMAL column directly against a DATE column with
      32 # no explicit .cast(). There is no implicit DECIMAL<->DATE conversion in
      33 # Spark, so resolving this column raises AnalysisException as soon as

@@ -1,0 +1,52 @@
+DataQualityError: check=expected_columns contract=orders_raw clause=columns.o_totalprice.present detail=available=['o_clerk', 'o_comment', 'o_custkey', 'o_orderdate', 'o_orderkey', 'o_orderpriority', 'o_orderstatus', 'o_shippriority', 'o_total_price']
+[Trace ID: 00-29298296263db16df2a3725aa0d4414d-9412d2b018e3ba21-00]
+---------------------------------------------------------------------------
+DataQualityError                          Traceback (most recent call last)
+File ~/.ipykernel/3743/command--1-748266780:8
+      5 del sys
+      7 with open(filename, "rb") as f:
+----> 8   exec(compile(f.read(), filename, 'exec'))
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/databricks_entry.py:31
+     27     importlib.import_module(f"self_healing.jobs.{args.job}").run(session, args.schema)
+     30 if __name__ == "__main__":
+---> 31     main(spark)
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/databricks_entry.py:27, in main(session)
+     24 args = parser.parse_args()
+     26 sys.path.insert(0, args.src)
+---> 27 importlib.import_module(f"self_healing.jobs.{args.job}").run(session, args.schema)
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/self_healing/jobs/broken_scenarios/contract_drift.py:21, in run(spark, schema)
+     19 # Defect: stands in for an upstream producer renaming a contracted column.
+     20 orders = spark.table(f"{schema}.orders_raw").withColumnRenamed("o_totalprice", "o_total_price")
+---> 21 validate_contract(orders, load_contract("orders_raw"))
+     23 summary = orders.groupBy("o_custkey").agg(
+     24     F.sum("o_total_price").alias("total_value"),
+     25     F.count("o_orderkey").alias("order_count"),
+     26 )
+     27 summary.write.mode("overwrite").saveAsTable(f"{schema}.orders_summary_contract_drift")
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/self_healing/jobs/contract.py:27, in validate_contract(df, contract)
+     25 columns = contract["columns"]
+     26 actual = {field.name: field.dataType.simpleString() for field in df.schema.fields}
+---> 27 check_expected_columns(actual, {column: spec["type"] for column, spec in columns.items()}, name)
+     29 not_null = [column for column, spec in columns.items() if not spec.get("nullable", True)]
+     30 key = contract["primary_key"]
+
+File /Workspace/Users/<user>/self-healing-databricks-pipeline-multi-agent/src/self_healing/jobs/checks.py:29, in check_expected_columns(actual, expected, contract)
+     27 for name, expected_type in expected.items():
+     28     if name not in actual:
+---> 29         raise DataQualityError(
+     30             "expected_columns", f"columns.{name}.present", f"available={sorted(actual)}", contract
+     31         )
+     32     if actual[name] != expected_type:
+     33         raise DataQualityError(
+     34             "expected_columns",
+     35             f"columns.{name}.type",
+     36             f"expected={expected_type} actual={actual[name]}",
+     37             contract,
+     38         )
+
+DataQualityError: check=expected_columns contract=orders_raw clause=columns.o_totalprice.present detail=available=['o_clerk', 'o_comment', 'o_custkey', 'o_orderdate', 'o_orderkey', 'o_orderpriority', 'o_orderstatus', 'o_shippriority', 'o_total_price']
+Workload failed, see run output for details
