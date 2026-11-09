@@ -1,0 +1,51 @@
+# Promotes the job definitions dev -> prod. Prod waits for approval on the
+# GitHub "prod" environment. Requires repository secrets DATABRICKS_HOST,
+# DATABRICKS_TOKEN, DATABRICKS_GIT_FOLDER and DATABRICKS_GIT_FOLDER_PROD. Each
+# job runs only when its repository variable DEPLOY_DEV or DEPLOY_PROD is "true".
+#
+# The Git folder paths are secrets, and the user name is masked, because Actions
+# logs are public on this repo and the bundle CLI prints the workspace user.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+  DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+jobs:
+  dev:
+    if: ${{ vars.DEPLOY_DEV == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_VAR_git_folder: ${{ secrets.DATABRICKS_GIT_FOLDER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.25.0
+      - name: Mask the workspace user name
+        run: |
+          user=$(databricks current-user me -o json | jq -er .userName)
+          echo "::add-mask::$user"
+      - run: databricks bundle validate -t dev
+      - run: databricks bundle deploy -t dev
+      - run: databricks repos update "$BUNDLE_VAR_git_folder" --branch main
+
+  prod:
+    needs: dev
+    if: ${{ vars.DEPLOY_PROD == 'true' }}
+    runs-on: ubuntu-latest
+    environment: prod
+    env:
+      BUNDLE_VAR_git_folder: ${{ secrets.DATABRICKS_GIT_FOLDER_PROD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.25.0
+      - name: Mask the workspace user name
+        run: |
+          user=$(databricks current-user me -o json | jq -er .userName)
+          echo "::add-mask::$user"
+      - run: databricks bundle validate -t prod
+      - run: databricks bundle deploy -t prod
+      - run: databricks repos update "$BUNDLE_VAR_git_folder" --branch main

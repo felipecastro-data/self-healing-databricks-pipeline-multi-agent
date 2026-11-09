@@ -1,0 +1,118 @@
+# Declares every Databricks job in this project. Jobs run from the workspace Git
+# folder, not from files the bundle uploads, because apply_patch syncs that
+# folder (see docs/adr/0004-bundle-jobs-run-from-git-folder.md).
+bundle:
+  name: self-healing-pipeline
+
+sync:
+  exclude: ["**"]
+
+variables:
+  git_folder:
+    description: Workspace path of the Git folder. Set BUNDLE_VAR_git_folder.
+  schema:
+    description: catalog.schema the jobs read and write.
+    default: self_healing_demo.pipeline
+  serverless_environment:
+    description: Serverless environment shared by all jobs.
+    type: complex
+    default:
+      - environment_key: default
+        spec:
+          environment_version: "3"
+          dependencies:
+            - PyYAML==6.0.3
+
+targets:
+  dev:
+    default: true
+  prod:
+    presets:
+      name_prefix: prod-
+    variables:
+      schema: self_healing_demo.pipeline_prod
+
+resources:
+  jobs:
+    ingest_orders_raw:
+      name: self-healing-ingest-orders-raw
+      environments: ${var.serverless_environment}
+      tasks:
+        - task_key: self-healing-ingest-orders-raw
+          environment_key: default
+          spark_python_task:
+            python_file: ${var.git_folder}/src/databricks_entry.py
+            source: WORKSPACE
+            parameters: ["--src", "${var.git_folder}/src", "--job", "ingest_orders_raw", "--schema", "${var.schema}"]
+    golden_job:
+      name: self-healing-golden-job
+      environments: ${var.serverless_environment}
+      tasks:
+        - task_key: self-healing-golden-job
+          environment_key: default
+          spark_python_task:
+            python_file: ${var.git_folder}/src/databricks_entry.py
+            source: WORKSPACE
+            parameters: ["--src", "${var.git_folder}/src", "--job", "golden_job", "--schema", "${var.schema}"]
+    schema_drift:
+      name: self-healing-schema-drift
+      environments: ${var.serverless_environment}
+      tasks:
+        - task_key: self-healing-schema-drift
+          environment_key: default
+          spark_python_task:
+            python_file: ${var.git_folder}/src/databricks_entry.py
+            source: WORKSPACE
+            parameters: ["--src", "${var.git_folder}/src", "--job", "broken_scenarios.schema_drift", "--schema", "${var.schema}"]
+    contract_drift:
+      name: self-healing-contract-drift
+      environments: ${var.serverless_environment}
+      tasks:
+        - task_key: self-healing-contract-drift
+          environment_key: default
+          spark_python_task:
+            python_file: ${var.git_folder}/src/databricks_entry.py
+            source: WORKSPACE
+            parameters: ["--src", "${var.git_folder}/src", "--job", "broken_scenarios.contract_drift", "--schema", "${var.schema}"]
+    null_violation:
+      name: self-healing-null-violation
+      environments: ${var.serverless_environment}
+      tasks:
+        - task_key: self-healing-null-violation
+          environment_key: default
+          spark_python_task:
+            python_file: ${var.git_folder}/src/databricks_entry.py
+            source: WORKSPACE
+            parameters: ["--src", "${var.git_folder}/src", "--job", "broken_scenarios.null_violation", "--schema", "${var.schema}"]
+    oom:
+      name: self-healing-oom
+      # Unbounded by design; this stops it from consuming the serverless quota.
+      timeout_seconds: 900
+      environments: ${var.serverless_environment}
+      tasks:
+        - task_key: self-healing-oom
+          environment_key: default
+          spark_python_task:
+            python_file: ${var.git_folder}/src/databricks_entry.py
+            source: WORKSPACE
+            parameters: ["--src", "${var.git_folder}/src", "--job", "broken_scenarios.oom", "--schema", "${var.schema}"]
+    bad_join:
+      name: self-healing-bad-join
+      environments: ${var.serverless_environment}
+      tasks:
+        - task_key: self-healing-bad-join
+          environment_key: default
+          spark_python_task:
+            python_file: ${var.git_folder}/src/databricks_entry.py
+            source: WORKSPACE
+            parameters: ["--src", "${var.git_folder}/src", "--job", "broken_scenarios.bad_join", "--schema", "${var.schema}"]
+    type_mismatch:
+      name: self-healing-type-mismatch
+      environments: ${var.serverless_environment}
+      tasks:
+        - task_key: self-healing-type-mismatch
+          environment_key: default
+          spark_python_task:
+            python_file: ${var.git_folder}/src/databricks_entry.py
+            source: WORKSPACE
+            parameters: ["--src", "${var.git_folder}/src", "--job", "broken_scenarios.type_mismatch", "--schema", "${var.schema}"]

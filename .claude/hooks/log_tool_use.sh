@@ -4,13 +4,14 @@
 # the PostToolUse matcher to mcp__databricks-self-healing-pipeline__* only,
 # so ordinary Read/Edit/Bash tool use elsewhere in this repo isn't logged as
 # diagnostic evidence.
+# Workspace host and user path are redacted before anything reaches the journal.
 set -uo pipefail
 
 JOURNAL="${CLAUDE_PROJECT_DIR}/evidence/run_journal.jsonl"
 TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 jq -c --arg ts "$TIMESTAMP" '
-  (.tool_response | tostring) as $raw |
+  ((.tool_response | tostring) | (. | gsub("https://[A-Za-z0-9.-]+\\.cloud\\.databricks\\.com"; "https://<workspace-host>") | gsub("/Workspace/Users/[^/\"\\\\ ]+"; "/Workspace/Users/<user>"))) as $raw |
   {
     timestamp: $ts,
     hook_event: "PostToolUse",

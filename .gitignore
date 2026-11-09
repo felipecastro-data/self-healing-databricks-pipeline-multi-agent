@@ -20,6 +20,7 @@ env/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Workspace-specific generated state
 job_ids.json

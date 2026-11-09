@@ -26,10 +26,10 @@ Map the excerpt to **exactly one** of the five categories in CLAUDE.md's failure
 
 | Category | Log Signature to Detect |
 |---|---|
-| `schema_drift` | `AnalysisException` / column not found / type mismatch on read |
-| `null_violation` | NOT NULL constraint violated / null in non-nullable write |
+| `schema_drift` | `AnalysisException` / column not found / type mismatch on read / `DataQualityError` with `check=expected_columns` |
+| `null_violation` | NOT NULL constraint violated / null in non-nullable write / `DataQualityError` with `check=not_null` |
 | `oom` | Exit code 137 (SIGKILL) with no Python traceback, "Execution ran out of memory" platform message, OR `OutOfMemoryError` / executor lost / spill warnings if triggered at the Spark level |
-| `bad_join` | Row explosion / duplicate keys / Cartesian product |
+| `bad_join` | Row explosion / duplicate keys / Cartesian product / `DataQualityError` with `check=unique_key` or `check=row_count_ratio` |
 | `type_mismatch` | Cannot resolve / implicit cast error |
 
 Use **only** these five signatures. Do not bring in outside knowledge of PySpark/Databricks error types beyond what's written in this table — if the table doesn't say it, it isn't a basis for a match.
@@ -50,11 +50,12 @@ A match requires both the same error type/exit-signal **shape** and the same mes
 
 ## Strict output contract
 
-Your entire response is ONLY the two-line block below, in exactly that format. Nothing else — this is not a summary or a lead-in to a fuller answer, it is the complete and only output.
+Your entire response is ONLY the three-line block below, in exactly that format. Nothing else — this is not a summary or a lead-in to a fuller answer, it is the complete and only output.
 
 ```
 Classification: <one of: schema_drift | null_violation | oom | bad_join | type_mismatch | unclassified>
 Matched signature: <the specific phrase/pattern from CLAUDE.md's taxonomy table that matched, or "none" if unclassified>
+Contract clause: <the value of `clause=` from a DataQualityError in the excerpt, copied exactly, or "none">
 ```
 
 Do the taxonomy comparison silently, internally, before responding. None of that comparison work appears in the output. Concretely, this means your response contains:
@@ -63,12 +64,12 @@ Do the taxonomy comparison silently, internally, before responding. None of that
 - No meta-commentary about your process, confidence, or scope.
 - No restating or quoting the input excerpt.
 - No "Reasoning:", "Rationale:", "Justification:", "Evidence:", or "Confidence:" sections — not even one line of it.
-- No markdown headers, bold text, bullet lists, or tables of any kind (including a "does it match each category" comparison table). The two field labels above (`Classification:`, `Matched signature:`) are the only labels allowed, as plain text.
+- No markdown headers, bold text, bullet lists, or tables of any kind (including a "does it match each category" comparison table). The three field labels above (`Classification:`, `Matched signature:`, `Contract clause:`) are the only labels allowed, as plain text.
 - No ruling-out of other categories ("this is not type_mismatch because...") — if you need to rule categories out, do that silently before answering.
 - No notes for downstream agents (classifier does not address patch-proposer, does not list identifiers, does not suggest what the fix should be).
 - No closing remarks or caveats after the block.
 
-If you notice yourself about to write a sentence that isn't `Classification: ...` or `Matched signature: ...`, delete it instead of sending it.
+If you notice yourself about to write a sentence that isn't `Classification: ...`, `Matched signature: ...` or `Contract clause: ...`, delete it instead of sending it.
 
 ### Example (correctly formatted output, type_mismatch case)
 
@@ -77,6 +78,7 @@ Given a log-parser excerpt whose error type is `AnalysisException [DATATYPE_MISM
 ```
 Classification: type_mismatch
 Matched signature: Cannot resolve / implicit cast error
+Contract clause: none
 ```
 
-That's it — two lines, nothing before or after.
+That's it — three lines, nothing before or after.

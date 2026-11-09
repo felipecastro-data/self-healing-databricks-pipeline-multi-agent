@@ -14,10 +14,11 @@ Raw Databricks job run output: the full driver log/stdout/stderr for a failed ru
 
 Extract ONLY the lines relevant to diagnosing the failure:
 
-1. **Exception class name and message** — e.g. `AnalysisException`, `AssertionError`. For platform-level failures (no Python/Spark exception at all, e.g. OOM kills), capture the exit code and platform message instead (e.g. exit code 137, "Execution ran out of memory") — see the note in CLAUDE.md section 2 that `oom` may surface this way rather than as a stack trace.
+1. **Exception class name and message** — e.g. `AnalysisException`, `DataQualityError`. A `DataQualityError` message is a set of `key=value` fields (`check=`, `contract=`, `clause=`, `detail=`): copy it whole. For platform-level failures (no Python/Spark exception at all, e.g. OOM kills), capture the exit code and platform message instead (e.g. exit code 137, "Execution ran out of memory") — see the note in CLAUDE.md section 2 that `oom` may surface this way rather than as a stack trace.
 2. **The specific error signature line** matching one of the patterns in CLAUDE.md's failure taxonomy table (section 2).
-3. **Relevant stack trace frames** that point into files under `pipelines/`. Ignore PySpark internals, JVM internals, and Databricks platform internals frames entirely — do not include them even for context.
+3. **Relevant stack trace frames** that point into files under `src/self_healing/jobs/`. Skip `src/databricks_entry.py`, the shared launcher. Ignore PySpark internals, JVM internals, and Databricks platform internals frames entirely — do not include them even for context.
 4. **Any table/column/identifier names** mentioned in the error (table names, column names, join keys, etc.).
+5. **Structured job output** — lines of JSON with `level`, `job` and `event` fields are the job's own log. Keep only `WARNING` lines and lines whose fields explain the failure (e.g. `input_rows`, `output_rows`).
 
 ## What NOT to do
 
@@ -56,14 +57,13 @@ If there's truly nothing for a field (e.g. no identifiers), write `none found` (
 
 ### Example (correctly formatted output, schema_drift case)
 
-Given a raw log where `orders.withColumn("customer_email", F.col("o_customer_email"))` at `pipelines/broken_scenarios/schema_drift.py:34` fails because `o_customer_email` doesn't exist on the `orders_raw` table, the ENTIRE response should be:
+Given a raw log where `orders.withColumn("customer_email", F.col("o_customer_email"))` at `src/self_healing/jobs/broken_scenarios/schema_drift.py:34` fails because `o_customer_email` doesn't exist on the `orders_raw` table, the ENTIRE response should be:
 
 ```
 Error type / exit signal: AnalysisException (UNRESOLVED_COLUMN.WITH_SUGGESTION)
 Error message: A column, variable, or function parameter with name `o_customer_email` cannot be resolved. Did you mean one of the following? [`o_custkey`, `o_comment`, `o_clerk`, `o_orderkey`, `o_orderdate`].
 Relevant frames:
-  pipelines/broken_scenarios/schema_drift.py:34 — enriched.withColumn("customer_email", F.col("o_customer_email"))
-  pipelines/broken_scenarios/schema_drift.py:43 — run() call in __main__
+  src/self_healing/jobs/broken_scenarios/schema_drift.py:34 — enriched.withColumn("customer_email", F.col("o_customer_email"))
 Identifiers mentioned: table orders_raw, missing column o_customer_email, near-match suggestions o_custkey/o_comment/o_clerk/o_orderkey/o_orderdate
 ```
 

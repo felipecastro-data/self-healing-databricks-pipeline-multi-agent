@@ -1,5 +1,6 @@
-pyspark
-pandas
-databricks-sdk
-python-dotenv
-mcp<2
+pyspark==4.3.0
+pandas==2.3.3
+databricks-sdk==0.136.0
+python-dotenv==1.2.3
+mcp==1.30.0
+PyYAML==6.0.3

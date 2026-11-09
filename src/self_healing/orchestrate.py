@@ -13,7 +13,7 @@ stops. Applying the patch (apply_patch) and re-running the job (run_job) are
 gated behind the PreToolUse approval hook in .claude/settings.json and stay
 manual, human-approved steps performed interactively afterward.
 
-Usage: python orchestrate.py <job_name>
+Usage: python -m self_healing.orchestrate <job_name> (or: make demo JOB=<job_name>)
 """
 
 from __future__ import annotations
@@ -23,9 +23,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from mcp_server import databricks_mcp
+from self_healing.mcp import databricks_mcp
 
-REPO_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Belt-and-suspenders alongside the PreToolUse approval hook in
 # .claude/settings.json: the headless session below has no human present to
@@ -54,7 +54,8 @@ Raw run output:
 Steps:
 1. Invoke the `log-parser` subagent with the raw run output above as its input. Show its structured excerpt.
 2. Invoke the `classifier` subagent with log-parser's excerpt as its input. Show its classification.
-3. Invoke the `patch-proposer` subagent with classifier's output and log-parser's excerpt as its input. Show its proposed patch.
+3. Invoke the `patch-proposer` subagent with classifier's output and log-parser's excerpt as its input.
+   Show its proposed patch.
 
 Do not call apply_patch or run_job, and do not re-trigger the job. Stop after
 printing patch-proposer's output — applying the patch and re-running the job
@@ -66,7 +67,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "job_name",
-        help="Registered job name from job_ids.json (see scripts/setup_databricks_jobs.py)",
+        help="Databricks job name declared in databricks.yml",
     )
     args = parser.parse_args()
 
