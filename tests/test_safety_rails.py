@@ -58,6 +58,17 @@ def test_hooks_redact_workspace_identifiers(tmp_path, hook, payload):
     assert "someone@example.com" not in entry and "dbc-1" not in entry
 
 
+def test_subagent_hook_reads_handback_from_transcript(tmp_path):
+    (tmp_path / "evidence").mkdir()
+    transcript = tmp_path / "agent.jsonl"
+    content = [{"type": "tool_use", "name": "SubagentHandback", "input": {"report": "Classification: oom"}}]
+    transcript.write_text(json.dumps({"type": "assistant", "message": {"content": content}}) + "\n")
+    payload = {"agent_type": "classifier", "session_id": "s", "agent_transcript_path": str(transcript)}
+    _hook("log_subagent_stop.sh", payload, tmp_path)
+    entry = json.loads((tmp_path / "evidence" / "run_journal.jsonl").read_text())
+    assert entry["output"] == "Classification: oom"
+
+
 def _run_main(monkeypatch, state):
     result = {"state": state, "run_id": 1, "run_page_url": "u"}
     monkeypatch.setattr(orchestrate.databricks_mcp, "run_job", lambda name: result)
