@@ -196,6 +196,13 @@
     "run_duration_s": 73
   },
   {
+    "job_name": "prod-self-healing-ingest-orders-raw",
+    "job_run_id": 1121783553442841,
+    "start_time": "2026-11-09T15:57:01Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 50
+  },
+  {
     "job_name": "self-healing-contract-drift",
     "job_run_id": 962630194267105,
     "start_time": "2026-11-09T16:01:38Z",
@@ -208,5 +215,68 @@
     "start_time": "2026-11-09T16:06:45Z",
     "result_state": "FAILED",
     "run_duration_s": 29
+  },
+  {
+    "job_name": "self-healing-oom",
+    "job_run_id": 1033756446066936,
+    "start_time": "2026-11-09T16:34:00Z",
+    "result_state": "TIMEDOUT",
+    "run_duration_s": 940
+  },
+  {
+    "job_name": "prod-self-healing-type-mismatch",
+    "job_run_id": 728336993885075,
+    "start_time": "2026-11-09T16:54:58Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 40
+  },
+  {
+    "job_name": "prod-self-healing-schema-drift",
+    "job_run_id": 473484459584527,
+    "start_time": "2026-11-09T16:55:45Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 33
+  },
+  {
+    "job_name": "prod-self-healing-bad-join",
+    "job_run_id": 35922855624694,
+    "start_time": "2026-11-09T16:57:01Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 36
+  },
+  {
+    "job_name": "prod-self-healing-contract-drift",
+    "job_run_id": 150564566090310,
+    "start_time": "2026-11-09T17:23:06Z",
+    "result_state": "FAILED",
+    "run_duration_s": 74
+  },
+  {
+    "job_name": "prod-self-healing-null-violation",
+    "job_run_id": 544965852583884,
+    "start_time": "2026-11-09T17:40:52Z",
+    "result_state": "FAILED",
+    "run_duration_s": 85
+  },
+  {
+    "job_name": "self-healing-contract-drift",
+    "job_run_id": 837731068685146,
+    "start_time": "2026-11-09T18:11:46Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 58
+  },
+  {
+    "job_name": "self-healing-null-violation",
+    "job_run_id": 1032821675400141,
+    "start_time": "2026-11-09T18:47:03Z",
+    "result_state": "SUCCESS",
+    "run_duration_s": 57
+  },
+  {
+    "job_name": "prod-self-healing-oom",
+    "job_run_id": 175511864896638,
+    "start_time": "2026-11-09T18:48:52Z",
+    "result_state": "TIMEDOUT",
+    "run_duration_s": 931
   }
 ]

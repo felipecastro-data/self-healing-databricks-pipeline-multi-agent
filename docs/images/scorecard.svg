@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1116 200" width="1116" height="200" role="img" aria-label="Results scorecard: 5 of 6 scenarios fixed and verified by a re-run; 2 of 5 needed a second patch; median diagnosis time 46 s; about 28,000 tokens per round; 7.5 million source rows; 6 of 6 prod runs matched dev" font-family="system-ui, -apple-system, &quot;Segoe UI&quot;, sans-serif">
+<title>Results scorecard: 5 of 6 scenarios fixed and verified by a re-run; 2 of 5 needed a second patch; median diagnosis time 46 s; about 28,000 tokens per round; 7.5 million source rows; 6 of 6 prod runs matched dev</title><style>
+  .surface { fill: #fcfcfb; } .card { fill: #ffffff; stroke: rgba(11,11,11,0.10); }
+  .ink { fill: #0b0b0b; } .ink2 { fill: #52514e; }
+  @media (prefers-color-scheme: dark) {
+    .surface { fill: #1a1a19; } .card { fill: #222221; stroke: rgba(255,255,255,0.10); }
+    .ink { fill: #f0efec; } .ink2 { fill: #c3c2b7; }
+  }
+</style>
+<rect class="surface" width="1116" height="200" rx="12"/>
+<text x="24" y="36" class="ink" font-size="17" text-anchor="start" font-weight="600">Results scorecard · 6 scenarios with injected defects, measured 2026-11-09</text>
+<rect class="card" x="24" y="60" width="168" height="116" rx="10"/>
+<text x="38" y="86" class="ink2" font-size="12" text-anchor="start" font-weight="400">Fixed and verified</text>
+<text x="38" y="102" class="ink2" font-size="12" text-anchor="start" font-weight="400">by a re-run</text>
+<text x="38" y="138" class="ink" font-size="30" text-anchor="start" font-weight="600">5/6</text>
+<text x="38" y="160" class="ink2" font-size="10.5" text-anchor="start" font-weight="400">oom has no applied fix</text>
+<rect class="card" x="204" y="60" width="168" height="116" rx="10"/>
+<text x="218" y="86" class="ink2" font-size="12" text-anchor="start" font-weight="400">Fixes that needed</text>
+<text x="218" y="102" class="ink2" font-size="12" text-anchor="start" font-weight="400">a second patch</text>
+<text x="218" y="138" class="ink" font-size="30" text-anchor="start" font-weight="600">2/5</text>
+<text x="218" y="160" class="ink2" font-size="10.5" text-anchor="start" font-weight="400">valid code, wrong first fix</text>
+<rect class="card" x="384" y="60" width="168" height="116" rx="10"/>
+<text x="398" y="86" class="ink2" font-size="12" text-anchor="start" font-weight="400">Median diagnosis time</text>
+<text x="398" y="138" class="ink" font-size="30" text-anchor="start" font-weight="600">46 s</text>
+<text x="398" y="160" class="ink2" font-size="10.5" text-anchor="start" font-weight="400">includes human waiting</text>
+<rect class="card" x="564" y="60" width="168" height="116" rx="10"/>
+<text x="578" y="86" class="ink2" font-size="12" text-anchor="start" font-weight="400">Tokens per round</text>
+<text x="578" y="138" class="ink" font-size="30" text-anchor="start" font-weight="600">~28k</text>
+<text x="578" y="160" class="ink2" font-size="10.5" text-anchor="start" font-weight="400">27k to 29k, three agents</text>
+<rect class="card" x="744" y="60" width="168" height="116" rx="10"/>
+<text x="758" y="86" class="ink2" font-size="12" text-anchor="start" font-weight="400">Source rows</text>
+<text x="758" y="138" class="ink" font-size="30" text-anchor="start" font-weight="600">7.5M</text>
+<text x="758" y="160" class="ink2" font-size="10.5" text-anchor="start" font-weight="400">samples.tpch.orders</text>
+<rect class="card" x="924" y="60" width="168" height="116" rx="10"/>
+<text x="938" y="86" class="ink2" font-size="12" text-anchor="start" font-weight="400">Prod runs</text>
+<text x="938" y="102" class="ink2" font-size="12" text-anchor="start" font-weight="400">matching dev</text>
+<text x="938" y="138" class="ink" font-size="30" text-anchor="start" font-weight="600">6/6</text>
+<text x="938" y="160" class="ink2" font-size="10.5" text-anchor="start" font-weight="400">before the last two fixes</text>
+</svg>
