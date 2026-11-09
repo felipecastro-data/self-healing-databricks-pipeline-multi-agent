@@ -1,180 +1,345 @@
-# Self-Healing Data Pipeline: Diagnostic Multi-Agent System for Databricks
+<div align="center">
 
-A constrained, auditable diagnose-and-remediate loop for Databricks PySpark job failures, built on Claude Code's subagents, hooks, and MCP tooling. When a registered job fails, a deterministic trigger (`orchestrate.py`) pulls the raw run output and hands it to a fixed three-agent chain — **log-parser → classifier → patch-proposer** — that reduces the log to its relevant signal, maps it to one of five known failure categories, and fills in that category's templated remediation using specifics pulled from the log. Nothing is applied automatically: every patch and every job re-trigger is blocked behind a human approval gate (a Claude Code `PreToolUse` hook), and every step of the chain — every tool call result and every subagent completion — is appended to `evidence/run_journal.jsonl` for after-the-fact audit. This is deliberately **not** a free-form autonomous fixer; it exists to demonstrate a narrow, evidence-producing diagnostic loop where an LLM proposes and a human disposes.
+# 🩺 Self-Healing Databricks Pipeline
 
-This repo is a portfolio project. Its credibility rests on the real bugs found and real evidence captured while building it (see [Design decisions worth calling out](#design-decisions-worth-calling-out) and [How it works](#how-it-works)), not on a claim that the system is flawless — two of five broken scenarios are diagnosed-but-not-yet-fixed, and the richest example below took two full diagnostic passes because the first proposed patch was itself wrong.
+**When a Databricks job fails, three Claude agents find the error, classify it, and propose a templated fix.
+A person approves every patch and every re-run, and every step is written to an audit journal.**
 
-## Architecture
+[![CI](https://github.com/felipecastro-data/self-healing-databricks-pipeline-multi-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/felipecastro-data/self-healing-databricks-pipeline-multi-agent/actions/workflows/ci.yml)
+![Databricks](https://img.shields.io/badge/Databricks-Free%20Edition-FF3621?logo=databricks&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![Claude Code](https://img.shields.io/badge/Claude%20Code-subagents%20%2B%20hooks-D97757?logo=anthropic&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-4%20tools-0b0b0b)
+
+[Why](#-why-this-project) · [Architecture](#-architecture) · [Features](#-features) · [Demo](#-see-it-run) ·
+[Results](#-results) · [Decisions](#-architecture-decisions) · [Quickstart](#-quickstart) · [Author](#-author--certifications)
+
+</div>
+
+---
+
+## 💡 Why this project
+
+A failed Spark job leaves a long log, and most of it is noise. An LLM can read that log quickly, but an LLM that can also change code and re-run jobs will sometimes apply a fix that looks right and isn't. In this project that happened twice: one patch only renamed the exception, and another used a cast Spark doesn't support. Both were valid code, and neither fixed the job.
+
+So the system is deliberately narrow. The agents can only read and propose, and a person decides what happens next:
+
+| | Step | What happens |
+|---|---|---|
+| 🚨 | **Trigger** | [`orchestrate.py`](src/self_healing/orchestrate.py) runs a named job and, if it fails, fetches the raw output. |
+| ✂️ | **Parse** | `log-parser` reduces the log to the exception, the frames in pipeline code, and the identifiers. |
+| 🏷️ | **Classify** | `classifier` maps the excerpt to one of five known categories, or `unclassified`, and cites the violated contract clause. |
+| 🩹 | **Propose** | `patch-proposer` fills in that category's fix template with names taken from the log. |
+| ✋ | **Approve** | A `PreToolUse` hook stops `apply_patch` and `run_job` until a person says yes. |
+| 🔁 | **Verify** | The job is re-run. If it still fails, the new failure goes back through the chain. |
+| 📓 | **Record** | Hooks append every tool result and agent completion to [`evidence/run_journal.jsonl`](evidence/run_journal.jsonl). |
+
+**The failure taxonomy**
+
+| Category | Log signature | Template fix |
+|---|---|---|
+| `schema_drift` | `AnalysisException`, column not found, type mismatch on read, `DataQualityError` with `check=expected_columns` | Explicit schema or `mergeSchema` |
+| `null_violation` | NOT NULL violated, null in a non-nullable write, `DataQualityError` with `check=not_null` | `.na.drop()` or `.fillna()` on the column |
+| `oom` | Exit code 137 with no traceback, "Execution ran out of memory", `OutOfMemoryError`, executor lost | Repartition, or a broadcast join |
+| `bad_join` | Row explosion, duplicate keys, Cartesian product, `DataQualityError` with `check=unique_key` or `check=row_count_ratio` | Validate key uniqueness, switch join type |
+| `type_mismatch` | Cannot resolve, implicit cast error | Explicit `.cast()` on the column |
+
+---
+
+## 🧱 Architecture
 
 ```mermaid
 flowchart TD
-    A["Databricks Job fails\n(spark_python_task, serverless)"] -->|polled by| B["orchestrate.py\ndeterministic trigger"]
-    B -->|run_job / get_run_output| C["MCP server\nmcp_server/databricks_mcp.py"]
-    C -->|raw run output| D["Headless Claude Code session\n(claude -p)"]
-    D --> E["log-parser subagent\nextracts signal from noise"]
-    E --> F["classifier subagent\nmaps to 1 of 5 taxonomy categories"]
-    F --> G["patch-proposer subagent\nfills in fixed remediation template"]
-    G --> H{{"🔒 HUMAN APPROVAL GATE\nPreToolUse hook — approval_gate.sh\nblocks apply_patch AND run_job"}}
-    H -->|approved| I["apply_patch\ncommit + push + workspace Git-folder sync"]
-    I --> J["run_job\nre-trigger to verify the fix"]
-    J -->|still failing| D
-    J -->|SUCCESS| K[("evidence/run_journal.jsonl\none JSON line per event")]
+    A["Databricks job fails<br/>serverless spark_python_task"] -->|run_job, get_run_output| B["orchestrate.py<br/>deterministic trigger"]
+    B --> D["Headless Claude Code session"]
+    D --> E["log-parser"]
+    E --> F["classifier"]
+    F --> G["patch-proposer"]
+    G --> H{{"Human approval gate<br/>PreToolUse hook"}}
+    H -->|approved| I["apply_patch<br/>commit, push, sync Git folder"]
+    I --> J["run_job<br/>re-run to verify"]
+    J -->|still failing| E
+    J -->|SUCCESS| K[("evidence/run_journal.jsonl")]
 
     E -.->|SubagentStop hook| K
     F -.->|SubagentStop hook| K
     G -.->|SubagentStop hook| K
-    C -.->|PostToolUse hook| K
     I -.->|PostToolUse hook| K
     J -.->|PostToolUse hook| K
 
     style H fill:#7a1f1f,stroke:#ff4d4d,stroke-width:2px,color:#fff
 ```
 
-The human-approval step is the key design decision in this project: `orchestrate.py` never calls `apply_patch` or `run_job` itself (it's a headless session, so there's no human present to answer a prompt — it hard-blocks both tools via `--disallowedTools` as belt-and-suspenders alongside the hook). Applying a patch and re-verifying it are always separate, manual, human-approved steps performed afterward. See [Design decisions](#design-decisions-worth-calling-out) for why this matters concretely, not just in principle.
+`orchestrate.py` diagnoses a single named job each time it's run; it doesn't poll on a schedule. It never applies a patch or re-runs a job. The headless session blocks both tools outright, because no person is present to answer the approval prompt. Applying and verifying are separate steps in an interactive Claude Code session.
 
-## Failure taxonomy
+### Where the data contracts sit
 
-Pulled directly from `CLAUDE.md` §2, unmodified:
-
-| Category | Log Signature to Detect | Template Remediation |
-|---|---|---|
-| `schema_drift` | `AnalysisException` / column not found / type mismatch on read | Add explicit schema or `mergeSchema` option |
-| `null_violation` | NOT NULL constraint violated / null in non-nullable write | `.na.drop()` or `.fillna()` on the offending column |
-| `oom` | Exit code 137 (SIGKILL) with no Python traceback, "Execution ran out of memory" platform message, OR `OutOfMemoryError` / executor lost / spill warnings if triggered at the Spark level | Repartition or convert join to broadcast |
-| `bad_join` | Row explosion / duplicate keys / Cartesian product | Validate join key uniqueness, switch join type |
-| `type_mismatch` | Cannot resolve / implicit cast error | Explicit `.cast()` on offending column |
-
-Unlike the other four categories, `oom` failures may appear as a platform-level process kill (exit code, no stack trace) rather than a Python/Spark exception — this matters for how the log-parser agent handles it (see [Limitations](#limitations)).
-
-## How it works
-
-The `type_mismatch` scenario has the richest evidence trail of the five — two full diagnostic rounds, a genuinely wrong first patch, and a corrected second patch that actually fixed it — so it's used here as a real incident walkthrough rather than a hypothetical.
-
-**The scenario:** `pipelines/broken_scenarios/type_mismatch.py` computes a flag column comparing `o_totalprice` (`DECIMAL(18,2)`) directly against `o_orderdate` (`DATE`) with no cast, on the job `self-healing-type-mismatch`.
-
-### Round 1 — detection and a wrong first patch
-
-The original failure (captured in `evidence/logs/type_mismatch_before.txt`, commit `85bcd6a`):
-
-```
-[DATATYPE_MISMATCH.BINARY_OP_DIFF_TYPES] Cannot resolve "(o_totalprice = o_orderdate)" due to
-data type mismatch: the left and right operands of the binary operator have incompatible types
-("DECIMAL(18,2)" and "DATE"). SQLSTATE: 42K09
-...
-File .../type_mismatch.py:37
-     35 flagged = orders.withColumn(
-     36     "price_equals_order_date",
-     37     F.col("o_totalprice") == F.col("o_orderdate"),
-     38 )
+```mermaid
+flowchart LR
+    S[("samples.tpch.orders<br/>7,500,000 rows")] -->|contract: orders_raw| R[("orders_raw")]
+    R -->|contract: orders_raw| J["Aggregate per customer"]
+    J -->|contract: orders_summary| T[("orders_summary")]
+    J -.->|"DataQualityError<br/>check, contract, clause, detail"| L["Failure log"]
 ```
 
-**log-parser's excerpt** (from `evidence/run_journal.jsonl`, `2026-09-16T19:52:56Z`):
+### Code
+
+| Path | What it does |
+|---|---|
+| [`src/self_healing/orchestrate.py`](src/self_healing/orchestrate.py) | The trigger: runs a job and hands a failure to the agent chain. |
+| [`src/self_healing/mcp/`](src/self_healing/mcp) | MCP server with `list_runs`, `get_run_output`, `apply_patch` and `run_job`. |
+| [`src/self_healing/jobs/`](src/self_healing/jobs) | Ingestion, the golden job, contract validation, typed checks, JSON logging. |
+| [`src/self_healing/jobs/broken_scenarios/`](src/self_healing/jobs/broken_scenarios) | Six jobs that each inject one defect. |
+| [`src/self_healing/journal.py`](src/self_healing/journal.py) | Builds the results report from the evidence files. |
+| [`src/databricks_entry.py`](src/databricks_entry.py) | Single entry point that passes the injected `spark` session to a job's `run()`. |
+| [`.claude/agents/`](.claude/agents) | The three agents, each limited to the `Read` tool and a strict output format. |
+| [`.claude/hooks/`](.claude/hooks) | The approval gate and the two evidence loggers. |
+| [`contracts/`](contracts) | YAML data contracts for `orders_raw` and `orders_summary`. |
+| [`databricks.yml`](databricks.yml) | All eight jobs, with `dev` and `prod` targets. |
+
+---
+
+## ✨ Features
+
+### ✋ Approval before anything changes
+
+The gate is a hook, not an instruction to the model, so it applies whatever the model decides. The hook's message names the file or job involved. It covers only `apply_patch` and `run_job`, the two tools that change something.
+
+### 📜 Contract breaches, not bare assertions
+
+Jobs validate against YAML contracts before writing, and raise a typed `DataQualityError`. The classifier cites the clause that was broken, so a failure points at a named rule:
 
 ```
-Error type / exit signal: AnalysisException (DATATYPE_MISMATCH.BINARY_OP_DIFF_TYPES)
-Error message: Cannot resolve "(o_totalprice = o_orderdate)" due to data type mismatch: the left
-and right operands of the binary operator have incompatible types ("DECIMAL(18,2)" and "DATE").
-Identifiers mentioned: table self_healing_demo.pipeline.orders_raw, columns o_totalprice
-(DECIMAL(18,2)), o_orderdate (DATE), o_custkey, o_orderkey, derived column price_equals_order_date
+check=not_null contract=orders_summary clause=columns.total_value.not_null detail=null_rows=2521
 ```
 
-**classifier** (`19:53:07Z`): `Classification: type_mismatch` — `Matched signature: Cannot resolve / implicit cast error`
+| Clause | What it enforces |
+|---|---|
+| `columns.<name>.present` | The column exists |
+| `columns.<name>.type` | The column has the declared type |
+| `columns.<name>.not_null` | The column has no nulls |
+| `primary_key.unique` | The key has no duplicates |
+| `join_key.<name>.unique` | A join key is unique on its side of the join |
+| `row_count.max_ratio` | A join didn't multiply the rows beyond a limit |
 
-**patch-proposer's first patch** (`19:53:21Z`):
+### 🧩 Fixed templates, not free-form code
+
+`patch-proposer` can only fill in one of five templates. If the classifier doesn't get a clean match, the answer is `unclassified`, with no best guess.
+
+### 🔧 `apply_patch` refuses to guess
+
+| Guard | Refuses when |
+|---|---|
+| Path check | The file resolves outside the repo, or doesn't exist |
+| Exact match | The old snippet matches zero times, or more than once |
+| Sync check | The workspace Git folder doesn't reach the new commit (raises instead of reporting success) |
+
+### 🧮 Model output is parsed by code
+
+The classifier is told to follow a strict format, and sometimes hasn't. The report extracts the category with a regex and shows `unparsed` when it can't, so nothing depends on the model formatting its reply perfectly.
+
+### 🛡️ Evidence with identifiers removed
+
+Hooks redact the workspace host and user path before anything reaches the journal. Run durations are kept in [`evidence/run_history.json`](evidence/run_history.json), because the Jobs API keeps runs for only 60 days.
+
+---
+
+## 🎬 See it run
+
+The `type_mismatch` scenario shows why the gate exists. It compares `o_totalprice` (`DECIMAL(18,2)`) with `o_orderdate` (`DATE`).
+
+**Round 1: the right category and a wrong patch.** The classifier returned `type_mismatch`, and `patch-proposer` proposed a direct cast:
 
 ```diff
-- flagged = orders.withColumn("price_equals_order_date", F.col("o_totalprice") == F.col("o_orderdate"))
-+ flagged = orders.withColumn("price_equals_order_date", F.col("o_totalprice") == F.col("o_orderdate").cast("decimal(18,2)"))
+- F.col("o_totalprice") == F.col("o_orderdate"),
++ F.col("o_totalprice") == F.col("o_orderdate").cast("decimal(18,2)"),
 ```
-> Rationale: matches the type_mismatch signature (DATATYPE_MISMATCH.BINARY_OP_DIFF_TYPES comparing DECIMAL(18,2) and DATE), remediated by explicitly casting o_orderdate to decimal(18,2) so the comparison operands agree.
 
-This was applied via `apply_patch` (commit `794eb6e`, `20:28:21Z`) and re-verified via `run_job` (`20:36:19Z`) — **and it failed again**, with a different error (run_id `331698409850578`):
+The patch was approved and applied, and the re-run failed with a new error:
 
 ```
 [DATATYPE_MISMATCH.CAST_WITH_FUNC_SUGGESTION] Cannot resolve "CAST(o_orderdate AS DECIMAL(18,2))"
 due to data type mismatch: cannot cast "DATE" to "DECIMAL(18,2)".
-To convert values from "DATE" to "DECIMAL(18,2)", you can use the functions `UNIX_DATE` instead.
 ```
 
-Spark has no direct `DATE → DECIMAL` cast path at all — the first patch was syntactically valid PySpark that nonetheless failed at plan-analysis time. The template ("explicit `.cast()`") was correctly selected; the specific cast target chosen from the log's identifiers was not.
-
-### Round 2 — re-diagnosing the second failure
-
-Rather than hand-patching the obvious fix, the new failure was run back through the full chain from scratch:
-
-**log-parser** (`20:37:54Z`) re-extracted the new signature (`CAST_WITH_FUNC_SUGGESTION`, pointing at the same `type_mismatch.py:37`). **classifier** (`20:38:08Z`) re-confirmed `type_mismatch` / `Cannot resolve / implicit cast error`. **patch-proposer** (`20:38:36Z`), seeing the new error and the platform's own `UNIX_DATE` suggestion, proposed a corrected patch:
+**Round 2: the new failure went back through the chain.** The second patch stayed inside the same template, chaining supported casts:
 
 ```diff
 - F.col("o_totalprice") == F.col("o_orderdate").cast("decimal(18,2)"),
 + F.col("o_totalprice") == F.col("o_orderdate").cast("timestamp").cast("long").cast("decimal(18,2)"),
 ```
-> Rationale: matches the type_mismatch signature (DATATYPE_MISMATCH.CAST_WITH_FUNC_SUGGESTION on direct DATE->DECIMAL cast), remediated by chaining explicit .cast() calls through DATE -> TIMESTAMP -> LONG -> DECIMAL(18,2), a Spark-supported cast path, instead of the unsupported direct DATE->DECIMAL cast attempted in the prior patch.
 
-This stays within the fixed `type_mismatch` template (still "explicit `.cast()` on the offending column") rather than reaching for the platform-suggested `UNIX_DATE` function — a deliberate choice to chain three `.cast()` calls (DATE → TIMESTAMP → LONG → DECIMAL, i.e. epoch seconds) instead of introducing a new function outside the template's scope.
+The re-run succeeded ([before](evidence/logs/type_mismatch_before.txt), [after](evidence/logs/type_mismatch_after.txt)). The comparison is a contrived defect, so the fix shows the loop working rather than a meaningful business rule.
 
-### Verified fix
+**A contract breach, end to end** (2026-11-09, from the saved [run output](evidence/logs/null_violation_contract_before.txt)):
 
-Applied via `apply_patch` (commit `689b0b0`, `21:09:34Z`), re-verified via `run_job` (`21:11:37Z`, run_id `182106144832444`, job_run_id `239715506247208`): **`state: SUCCESS`**. `get_run_output` on the successful run returns no error text — captured as-is in `evidence/logs/type_mismatch_after.txt`, including run metadata, since this script (unlike `bad_join.py`) prints no stdout diagnostics of its own.
+```
+Classification: null_violation
+Matched signature: `DataQualityError` with `check=not_null`
+Contract clause: columns.total_value.not_null
+```
 
-## Evidence
+The proposed fix was `.na.drop(subset=["total_value"])`, chosen over `.fillna()` because a filled amount would be invented. It hasn't been applied.
 
-| Category | Job name | Before | After | Status |
-|---|---|---|---|---|
-| `schema_drift` | `self-healing-schema-drift` | [`schema_drift_before.txt`](evidence/logs/schema_drift_before.txt) | [`schema_drift_after.txt`](evidence/logs/schema_drift_after.txt) | **Fixed live**, two diagnostic passes (commits `adc19f7` → `d7d37e0`) — the first pass only renamed the exception (see [Design decisions](#design-decisions-worth-calling-out)); the second branches on the table's actual schema and prints an explicit warning when the column is absent. |
-| `null_violation` | `self-healing-null-violation` | [`null_violation_before.txt`](evidence/logs/null_violation_before.txt) | — | Evidence captured, not live-applied. |
-| `oom` | `self-healing-oom` | [`oom_before.txt`](evidence/logs/oom_before.txt) | — | Evidence captured, not live-applied. Failure signature is environment-dependent — see [Limitations](#limitations). |
-| `bad_join` | `self-healing-bad-join` | [`bad_join_before.txt`](evidence/logs/bad_join_before.txt) | [`bad_join_after.txt`](evidence/logs/bad_join_after.txt) | **Fixed live**, one diagnostic pass (commit `7cd60b9`). |
-| `type_mismatch` | `self-healing-type-mismatch` | [`type_mismatch_before.txt`](evidence/logs/type_mismatch_before.txt) | [`type_mismatch_after.txt`](evidence/logs/type_mismatch_after.txt) | **Fixed live**, two diagnostic passes (commits `794eb6e` → `689b0b0`) — see walkthrough above. |
+**The approval gate**
 
-Full machine-readable trail for the `type_mismatch` runs: [`evidence/run_journal.jsonl`](evidence/run_journal.jsonl).
+![The PreToolUse approval prompt blocking a run_job call until a person answers](docs/screenshots/approval-gate-prompt.png)
 
-## Design decisions worth calling out
+**The evidence journal** (captured in September, before the code moved to `src/`)
 
-**1. Why `apply_patch`/`run_job` are gated behind human approval instead of auto-applied.** The `schema_drift` scenario is the concrete case for this, not just the abstract one — and its full history, not just its first patch, is what makes the point. Its first "fix" (commit `adc19f7`) was pushed to the workspace *before* the approval gate existed (added later, commit `5c7ddf5`). It wrapped the missing-column reference in `assert "o_customer_email" in orders.columns, ...` — which did make the failure clearer (an `AssertionError` with an explicit message instead of a `withColumn` resolving into an `AnalysisException`) but did **not** fix the schema drift: the column was still missing, and the job still failed, verified live on a subsequent run. A patch that lands cleanly, commits, and pushes without erroring is not the same thing as a patch that resolves the failure — an unattended loop that treated "apply_patch succeeded" as "problem solved" would have been wrong here. To be clear about the timeline: the gate did not catch this patch — it couldn't have, since `adc19f7` predates `5c7ddf5` by two days and no approval step existed yet when it landed. It's cited here as the *motivating* case: this is the exact kind of silent non-fix that prompted adding the gate afterward. The eventual real fix (commit `d7d37e0`, see the [evidence table](#evidence)) only happened later, under the gate, when a human reviewing the stale assert-based patch explicitly told `patch-proposer` that fix was cosmetic and ruled it out before requesting a new diagnostic pass. The result branches on the table's actual schema — using `o_customer_email` if present, otherwise printing an explicit `[schema_drift] WARNING: ...` line and filling `customer_email` with `NULL` — rather than asserting a fixed shape. The gate's value isn't limited to blocking a single bad apply in the moment; it's what kept a human in the loop long enough to eventually catch and correct this one.
+![An excerpt of evidence/run_journal.jsonl showing tool calls and agent completions](docs/screenshots/run-journal-excerpt.png)
 
-**2. classifier/patch-proposer output-format compliance, and why the fallback is deterministic extraction, not more prompting.** Commit `710ec38`: *"The classifier's content is correct across repeated tests but it won't hold a strict two-line output contract... Verified against 16 cases: 12 real classifier outputs from this session plus 4 synthetic formatting variants (bold/dash-separator/case/mid-paragraph placement)."* Both `classifier.md` and `patch-proposer.md` carry unusually long "Strict output contract" sections (explicit bans on preamble, markdown headers, "Reasoning:" sections, closing remarks) as a direct result of this — and the fix that shipped alongside it wasn't further prompt-tightening but a deterministic regex extraction (`parse_classification()`, matching `Classification|Category` labels after stripping markdown emphasis) so a downstream consumer never depends on the model self-constraining perfectly. `orchestrate.py` was later rewritten to not parse the chain's output at all (it just relays a headless session's printed output and stops), but the pattern is preserved as an explicit note in `patch-proposer.md`: *"If a future consumer needs a machine-parseable field from this output... extract it deterministically... rather than relying on this agent's self-formatting being perfect every time."*
+---
 
-**3. Found via live testing: `run_job` returned the wrong `run_id`.** Commit `8b95442`: `run_job()` originally returned the parent job-level `run_id` from the SDK's `run_now`/`get_run` response. `get_run_output` rejects that — the Jobs API only accepts a task-level `run_id`, and refuses on any run with multiple tasks (which a single-task job's parent run technically is). This *"broke the first end-to-end orchestrate.py run against a real job"* per the commit message. The fix makes `run_job` resolve `run.tasks[-1].run_id` the same way `list_runs` already did, returning both `run_id` (task-level, feed to `get_run_output`) and `job_run_id` (parent, for the run page URL) — not something that surfaced in design or review, only in actually running the tool against a live workspace.
+## 📈 Results
 
-## Tech stack
+The [full report](docs/results.md) is generated by `make report` from the journal and the run history.
 
-- **Databricks Free Edition** — Unity Catalog (`self_healing_demo.pipeline.*`), serverless job compute (no cluster spec attached to any task), Git folders for workspace/repo sync
-- **Claude Code** — subagents (`log-parser`, `classifier`, `patch-proposer`, each with a `tools: Read`-only, strict-output-contract definition in `.claude/agents/`), hooks (`PreToolUse` approval gate, `PostToolUse`/`SubagentStop` evidence logging), and a project-local MCP server
-- **Python** — `pyspark`, `pandas`, `databricks-sdk`, `python-dotenv`, `mcp` (FastMCP)
-- **Custom MCP server** (`mcp_server/databricks_mcp.py`) — four tools (`list_runs`, `get_run_output`, `apply_patch`, `run_job`) that replace manual Databricks-UI copy/paste in the diagnose-and-remediate loop
+**Source data.** `orders_raw` is 7,500,000 rows copied from the public `samples.tpch.orders` table by [`ingest_orders_raw`](src/self_healing/jobs/ingest_orders_raw.py) (64 s). Runs up to 2026-09-17 used a 5,000-row table, and the runs on 2026-11-09 used the full table.
 
-## Limitations
+| Scenario | Diagnosis | Failing run | First successful run | Latest run (7.5M rows) | Status |
+|---|---:|---:|---:|---|---|
+| `type_mismatch` | 25 s, then 42 s | 52 s | 66 s | SUCCESS, 30 s | ✅ Fixed, took two patches |
+| `schema_drift` | 67 s | 39 s | 36 s | SUCCESS, 37 s | ✅ Fixed, took two patches |
+| `bad_join` | not journaled | 43 s | 71 s | SUCCESS, 37 s | ✅ Fixed |
+| `contract_drift` | 82 s, then 61 s | 60 s | n/a | FAILED, 60 s (by design) | 🔎 Diagnosed, not applied |
+| `null_violation` | 18 s | 90 s (5,000 rows) | n/a | FAILED, 61 s (by design) | 🔎 Diagnosed, not applied |
+| `oom` | not journaled | 812 s (5,000 rows) | n/a | not re-run | 🔎 Diagnosed earlier, not applied |
 
-- **Serverless-only compute.** Databricks Free Edition doesn't support attaching a classic cluster spec; every job in `job_ids.json` runs on serverless compute by default (`scripts/setup_databricks_jobs.py`). Behavior that depends on cluster-level configuration doesn't apply here.
-- **`patch-proposer` is template-bound, not general-purpose codegen.** It fills in exactly one of five fixed remediation templates per category and refuses (`unclassified`, no best-guess) when the classifier doesn't produce a clean match. It cannot propose a fix outside those five shapes, by design — see `.claude/agents/patch-proposer.md`'s hard constraints.
-- **The `oom` scenario's failure signature is environment-dependent.** `oom.py`'s own docstring notes that on a small demo table and Free Edition serverless compute specifically, the expected `OutOfMemoryError`/executor-lost signature may instead surface as a query timeout or a serverless resource-limit error — both are meant to be treated as the same `oom` category, but the log-parser/classifier chain hasn't been exercised live against every variant.
-- **`apply_patch` pushes the whole current branch, not just its own commit.** It runs `git push origin <branch>` after committing — if other commits are already sitting on that branch ahead of what's been reviewed, they go along for the ride. It's scoped to a single-branch, single-contributor demo workflow, not a shared branch.
+Failing and first successful runs are from the 5,000-row table, except `contract_drift`, which only exists at 7.5 million rows. The golden job took 39 s at 7.5 million rows.
 
-## Setup / reproduction
+**How much a round uses.** About 27,000 to 29,000 tokens across the three agents. The agents' own working time was 16 s and 22 s in the last two rounds. See the [design notes](docs/design.md#cost) for the breakdown.
 
-1. Create a [Databricks Free Edition](https://www.databricks.com/learn/free-edition) workspace and generate a personal access token (User Settings → Developer → Access tokens).
-2. In the workspace, add a **Git folder** (Repos) pointing at your fork/clone of this repository. `mcp_server/databricks_mcp.py` and `scripts/setup_databricks_jobs.py` both hardcode a `GIT_FOLDER` workspace path (`/Workspace/Users/<your-email>/...`) — update it to match your own workspace path and username.
-3. Clone this repo locally and create a `.env` file in the repo root:
-   ```
-   DATABRICKS_HOST=https://<your-workspace-host>
-   DATABRICKS_TOKEN=<your-PAT>
-   ```
-4. `pip install -r requirements.txt`
-5. `python scripts/setup_databricks_jobs.py` — idempotently registers `golden_job.py` plus the five `broken_scenarios/*.py` files as Databricks Jobs, and writes `job_ids.json` (gitignored — workspace-specific).
-6. `.mcp.json` already registers `mcp_server/databricks_mcp.py` as a local stdio MCP server for Claude Code — run `claude` from the repo root and approve the MCP server when prompted.
-7. Trigger a failing job end-to-end: `python orchestrate.py self-healing-type-mismatch` (or any other registered job name) — this runs the job, and on failure hands the raw output to a headless Claude Code session that runs log-parser → classifier → patch-proposer and prints the proposed patch, then stops.
-8. Review the proposed patch, then interactively (inside a normal `claude` session in this repo) call `apply_patch` and `run_job` yourself to apply and re-verify it — you'll be prompted to approve each at the `PreToolUse` gate.
+**How to read these numbers**
 
-## Screenshots
+- **Runtimes don't show the fixes made jobs faster.** The same golden job took between 22 and 62 s across 5 runs on 5,000 rows, so differences of this size are noise.
+- **Diagnosis time includes waiting.** It runs from log-parser finishing to patch-proposer finishing, in interactive sessions where agents were started by hand. It's an upper bound on the agents' time.
+- **The report's counts cover only what's journaled.** It shows 8 rounds, 3 patches applied and 2 verified. The journal started on 2026-09-16, after the `bad_join` fix (15 September) and the first `schema_drift` patch, so those aren't counted.
+- **Rounds aren't separate incidents.** `contract_drift` and `null_violation` were each diagnosed more than once from the same saved failure.
+- **Three rounds show `unparsed`,** because the agents ended with a hand-back tool call and the hook logged either nothing or a "report delivered" note. The hook now reads the agent transcript. Rows already written were left as they were.
+- **Repeating a round can give a different patch.** Two `contract_drift` rounds produced different renames. Only the classification was stable, and neither patch was run.
+- **Accuracy isn't measured.** Six scenarios, each with a known injected defect, are a demonstration and not an estimate of how this performs on real failures.
+- **Older evidence cites old paths.** Logs and journal rows from September refer to `pipelines/...` and `mcp_server/...`, from before the code moved to `src/self_healing/`. They're kept as they were recorded.
 
-![Databricks Jobs list](docs/screenshots/jobs-list.png)
-_Databricks Jobs list showing the registered pipeline jobs._
+---
 
-![Type mismatch failure](docs/screenshots/type-mismatch-failure.png)
-_The `CAST_WITH_FUNC_SUGGESTION` `AnalysisException` — the first patch attempt's failure (round 2 of the `type_mismatch` walkthrough above), not the original `BINARY_OP_DIFF_TYPES` error._
+## 🧭 Architecture decisions
 
-![Approval gate prompt](docs/screenshots/approval-gate-prompt.png)
-_The `PreToolUse` approval prompt blocking `apply_patch`/`run_job` until explicitly approved._
+| ADR | Decision |
+|---|---|
+| [0001](docs/adr/0001-human-approval-gate.md) | Human approval before any patch or re-run |
+| [0002](docs/adr/0002-deterministic-extraction-fallback.md) | Extract the classifier's category with a regex |
+| [0003](docs/adr/0003-push-whole-branch.md) | `apply_patch` pushes the whole current branch (a known risk) |
+| [0004](docs/adr/0004-bundle-jobs-run-from-git-folder.md) | The bundle declares jobs, but they run from the Git folder |
 
-![Run journal excerpt](docs/screenshots/run-journal-excerpt.png)
-_An excerpt of `evidence/run_journal.jsonl` showing the diagnostic trail._
+Scale, cost, governance and security limits are written up in the [design notes](docs/design.md).
+
+---
+
+## 🚀 Quickstart
+
+**Prerequisites**
+
+- A [Databricks Free Edition](https://www.databricks.com/learn/free-edition) workspace with the `samples` catalog, and a personal access token
+- A Unity Catalog catalog named `self_healing_demo`
+- A workspace Git folder pointing at your fork of this repo
+- The [Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html), [Claude Code](https://code.claude.com/docs) and Python 3.11+
+
+**Run**
+
+```bash
+cp .env.example .env    # fill in DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_GIT_FOLDER
+make setup              # create venv/, deploy the jobs to dev, ingest orders_raw
+make demo JOB=self-healing-contract-drift
+```
+
+`make demo` runs the job, sends a failure through the three agents, prints the proposed patch and stops. To apply it, open `claude` in the repo and ask it to call `apply_patch` and then `run_job`. You'll be asked to approve each one.
+
+**Commands**
+
+| Command | What it does |
+|---|---|
+| `make setup` | Installs, deploys the bundle to dev, ingests `orders_raw` |
+| `make deploy [TARGET=prod]` | Validates and deploys the bundle |
+| `make ingest` | Rebuilds `orders_raw` |
+| `make demo JOB=<name>` | Runs a job and diagnoses a failure |
+| `make report` | Snapshots run history and regenerates `docs/results.md` |
+| `make test` / `make lint` | Runs pytest / ruff |
+
+On an iCloud-synced folder on macOS, name the environment `venv`, not `.venv`. iCloud marks dot-folders as hidden, and recent Python versions skip hidden `.pth` files, which breaks the editable install.
+
+**Development**
+
+Tests run without credentials: the Spark tests use a local session, which needs Java, and the Databricks and Git calls are mocked. CI runs ruff and pytest on Python 3.12 and 3.14.
+
+```bash
+pip install -e ".[dev]"
+ruff check .
+pytest
+```
+
+**Deployment.** [`deploy.yml`](.github/workflows/deploy.yml) validates and deploys to `dev` on every push to `main`, and `prod` waits for approval on a GitHub `prod` environment. It stays inactive until the repository has the secrets `DATABRICKS_HOST` and `DATABRICKS_TOKEN` and the variables `DATABRICKS_GIT_FOLDER` and `DATABRICKS_GIT_FOLDER_PROD`.
+
+### Known limitations
+
+- **Not everything has run end to end.** The jobs and contracts ran on Databricks, and the MCP server and each agent ran for real. `make demo` hasn't been run on the current code. `deploy.yml` has never run, and the `prod` target has been validated but never deployed.
+- **`oom` wasn't re-run at 7.5 million rows.** The job is unbounded on purpose and now has a 15-minute timeout. Its log signature also depends on the environment.
+- **One job at a time, triggered by hand.** See the [design notes](docs/design.md#scalability) for what continuous detection would need.
+- **`apply_patch` can edit any file in the repo and pushes the whole branch.** The approval gate is the only control over which file it touches.
+- **Free Edition serverless only.** Behaviour that depends on cluster configuration doesn't apply.
+
+<details>
+<summary><b>Repository layout</b></summary>
+
+```
+src/
+  databricks_entry.py     entry point for every Databricks job
+  self_healing/
+    orchestrate.py        trigger for the agent chain
+    journal.py            results report from the evidence files
+    mcp/                  MCP server and its four tools
+    jobs/                 ingestion, golden job, contracts, checks, JSON logging
+      broken_scenarios/   six jobs with one injected defect each
+contracts/                YAML data contracts
+.claude/agents/           log-parser, classifier, patch-proposer
+.claude/hooks/            approval gate and evidence loggers
+evidence/                 run journal, run history, before and after logs
+docs/                     design notes, ADRs, results, screenshots
+tests/                    checks, contracts, jobs, apply_patch, journal, safety hooks
+scripts/                  run-history snapshot
+databricks.yml            job definitions with dev and prod targets
+Makefile                  setup, deploy, ingest, demo, report, test, lint
+```
+
+</details>
+
+---
+
+## 🏅 Author & Certifications
+
+**Felipe Castro**<br>
+Senior Data Engineer @ EPAM Systems<br>
+[GitHub](https://github.com/felipecastro-data) · [LinkedIn](https://www.linkedin.com/in/felipecastro-data/)
+
+- 🏅 **[DP-700: Microsoft Certified: Fabric Data Engineer Associate](https://learn.microsoft.com/api/credentials/share/en-us/FelipeCastro-8026/96572499DF943EBC?sharingId=13D660F56C1DFFA3)**
+- 🏅 **[DP-600: Microsoft Certified: Fabric Analytics Engineer Associate](https://learn.microsoft.com/api/credentials/share/en-us/FelipeCastro-8026/6C5A2F5A8A5864FC?sharingId=13D660F56C1DFFA3)**
+- 🏅 **[PL-300: Microsoft Certified: Power BI Data Analyst Associate](https://learn.microsoft.com/api/credentials/share/en-us/FelipeCastro-8026/F853AABE365874B3?sharingId=13D660F56C1DFFA3)**
+
+---
+
+## 🧰 Tools & Tech
+
+![Databricks](https://img.shields.io/badge/Databricks-FF3621?style=flat&logo=databricks&logoColor=white)
+![Unity Catalog](https://img.shields.io/badge/Unity%20Catalog-1B3139?style=flat&logo=databricks&logoColor=white)
+![Python](https://img.shields.io/badge/Python%203.11%2B-3776AB?style=flat&logo=python&logoColor=white)
+![PySpark](https://img.shields.io/badge/PySpark-E25A1C?style=flat&logo=apachespark&logoColor=white)
+![Claude Code](https://img.shields.io/badge/Claude%20Code-D97757?style=flat&logo=anthropic&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-0b0b0b?style=flat&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=githubactions&logoColor=white)
+![pytest](https://img.shields.io/badge/pytest-0A9EDC?style=flat&logo=pytest&logoColor=white)
+![Ruff](https://img.shields.io/badge/Ruff-D7FF64?style=flat&logo=ruff&logoColor=black)
+![Mermaid](https://img.shields.io/badge/Mermaid-FF3670?style=flat&logo=mermaid&logoColor=white)
+
+---
+
+The data is the public TPC-H sample from `samples.tpch`, which is generated rather than real business data.
