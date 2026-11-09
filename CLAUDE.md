@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-This is a portfolio project demonstrating a self-healing data pipeline for Databricks, orchestrated by a multi-agent diagnostic system. When a Databricks job fails, a deterministic poller detects the failure and hands the raw run output to a chain of specialized agents: one extracts the relevant log signal from the noise, one classifies the failure against a fixed taxonomy of known error categories, and one proposes a templated remediation using specifics pulled from the log (table names, column names, etc.). The goal is to show a constrained, auditable diagnosis-and-remediation loop — not a free-form autonomous fixer — with every step logged as evidence and every applied patch gated behind an approval step.
+This is a portfolio project demonstrating a self-healing data pipeline for Databricks, orchestrated by a multi-agent diagnostic system. When a Databricks job run by the deterministic trigger fails, the trigger hands the raw run output to a chain of specialized agents: one extracts the relevant log signal from the noise, one classifies the failure against a fixed taxonomy of known error categories, and one proposes a templated remediation using specifics pulled from the log (table names, column names, etc.). The goal is to show a constrained, auditable diagnosis-and-remediation loop — not a free-form autonomous fixer — with every step logged as evidence and every applied patch gated behind an approval step.
 
 ## 2. Failure Taxonomy
 
@@ -26,11 +26,11 @@ Unlike the other four categories, `oom` failures may appear as a platform-level 
 
 ## 4. Architecture Note
 
-`src/self_healing/orchestrate.py` is the deterministic trigger for this system: it polls the Databricks Jobs API via the Databricks SDK on a fixed interval, detects failed runs, and kicks off the agent chain (log-parser → classifier → patch-proposer). It is a plain Python script, not a Claude Code hook — the polling loop and failure detection logic run independently of Claude Code's hook system.
+`src/self_healing/orchestrate.py` is the deterministic trigger for this system: run by hand for one named job (`make demo JOB=<name>`), it does not poll or run on a schedule. It triggers that job with the MCP server's `run_job` function and waits for the result. If the run fails, it fetches the output with `get_run_output` and starts a headless `claude -p` session that runs the agent chain (log-parser → classifier → patch-proposer). That session has `apply_patch` and `run_job` disallowed, because no human is present to approve them, so it stops at a proposed patch. The script is plain Python, not a Claude Code hook: its `run_job` call is a direct function call rather than a tool call, so the PreToolUse gate below does not apply to it, and its trigger and failure detection run independently of Claude Code's hook system.
 
 Claude Code hooks are used narrowly, for two things only:
 - **PreToolUse**: an approval gate that blocks `apply_patch` and `run_job` tool calls until explicitly approved, so no remediation is applied or job re-triggered without a human (or explicit policy) in the loop.
-- **PostToolUse` / `SubagentStop`**: logging — every tool call result and subagent completion is appended to `evidence/run_journal.jsonl` so the full diagnostic trail is auditable after the fact.
+- **`PostToolUse` / `SubagentStop`**: logging — every tool call result and subagent completion is appended to `evidence/run_journal.jsonl` so the full diagnostic trail is auditable after the fact.
 
 No other hook logic exists in this project; hooks are not used to drive orchestration.
 
