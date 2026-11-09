@@ -278,7 +278,7 @@ ruff check .
 pytest
 ```
 
-**Deployment.** [`deploy.yml`](.github/workflows/deploy.yml) validates and deploys to `dev` on every push to `main`, and `prod` waits for approval on a GitHub `prod` environment. It stays inactive until the repository has the secrets `DATABRICKS_HOST` and `DATABRICKS_TOKEN` and the variables `DATABRICKS_GIT_FOLDER` and `DATABRICKS_GIT_FOLDER_PROD`.
+**Deployment.** [`deploy.yml`](.github/workflows/deploy.yml) validates and deploys to `dev` on every push to `main`, and `prod` waits for approval on a GitHub `prod` environment. It needs the repository secrets `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_GIT_FOLDER` and `DATABRICKS_GIT_FOLDER_PROD`. Each job stays inactive until the repository variable `DEPLOY_DEV` or `DEPLOY_PROD` is `true`. The Git folder paths are secrets, and the workspace user name is masked, because Actions logs are public on a public repo and contain the Databricks user's email otherwise.
 
 ### Known limitations
 
