@@ -9,7 +9,7 @@ A person approves every patch and every re-run, and every step is written to an 
 ![Databricks](https://img.shields.io/badge/Databricks-Free%20Edition-FF3621?logo=databricks&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-subagents%20%2B%20hooks-D97757?logo=anthropic&logoColor=white)
-![MCP](https://img.shields.io/badge/MCP-4%20tools-0b0b0b)
+![MCP](https://img.shields.io/badge/MCP-5%20tools-0b0b0b)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [Why](#-why-this-project) · [Architecture](#-architecture) · [Features](#-features) · [Demo](#-see-it-run) ·
@@ -90,14 +90,15 @@ flowchart LR
 | Path | What it does |
 |---|---|
 | [`src/self_healing/orchestrate.py`](src/self_healing/orchestrate.py) | The trigger: runs a job and hands a failure to the agent chain. |
-| [`src/self_healing/mcp/`](src/self_healing/mcp) | MCP server with `list_runs`, `get_run_output`, `apply_patch` and `run_job`. |
-| [`src/self_healing/jobs/`](src/self_healing/jobs) | Ingestion, the golden job, contract validation, typed checks, JSON logging. |
+| [`src/self_healing/mcp/`](src/self_healing/mcp) | MCP server with `list_runs`, `get_run_output`, `get_table_lineage` (read-only, from `system.access.table_lineage`), `apply_patch` and `run_job`. |
+| [`src/self_healing/jobs/`](src/self_healing/jobs) | Ingestion, the golden job, `publish_evidence` (loads the evidence into Delta tables), contract validation, typed checks, JSON logging. |
 | [`src/self_healing/jobs/broken_scenarios/`](src/self_healing/jobs/broken_scenarios) | Six jobs that each inject one defect. |
 | [`src/self_healing/journal.py`](src/self_healing/journal.py) | Builds the results report from the evidence files. |
 | [`src/databricks_entry.py`](src/databricks_entry.py) | Single entry point that passes the injected `spark` session to a job's `run()`. |
 | [`.claude/agents/`](.claude/agents) | The three agents, each limited to the `Read` tool and a strict output format. |
 | [`.claude/hooks/`](.claude/hooks) | The approval gate and the two evidence loggers. |
 | [`contracts/`](contracts) | YAML data contracts for `orders_raw` and `orders_summary`. |
+| [`dashboards/`](dashboards) | AI/BI dashboard over the evidence tables, deployed by the bundle. |
 | [`databricks.yml`](databricks.yml) | All eight jobs, with `dev` and `prod` targets. |
 
 ---
@@ -251,7 +252,7 @@ Scale, cost, governance and security limits are written up in the [design notes]
 **Run**
 
 ```bash
-cp .env.example .env    # fill in DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_GIT_FOLDER
+cp .env.example .env    # fill in DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_GIT_FOLDER, DATABRICKS_WAREHOUSE_ID
 make setup              # create venv/, deploy the jobs to dev, ingest orders_raw
 make demo JOB=self-healing-contract-drift
 ```
@@ -269,6 +270,7 @@ The five scenarios with fixes are already patched in this repo, so `make demo` r
 | `make ingest` | Rebuilds `orders_raw` |
 | `make demo JOB=<name>` | Runs a job and diagnoses a failure |
 | `make report` | Snapshots run history and regenerates `docs/results.md` |
+| `make publish [TARGET=prod]` | Loads the evidence into Delta tables for the results dashboard |
 | `make test` / `make lint` | Runs pytest / ruff |
 
 On an iCloud-synced folder on macOS, name the environment `venv`, not `.venv`. iCloud marks dot-folders as hidden, and recent Python versions skip hidden `.pth` files, which breaks the editable install.
@@ -283,7 +285,7 @@ ruff check .
 pytest
 ```
 
-**Deployment.** [`deploy.yml`](.github/workflows/deploy.yml) validates and deploys to `dev` on every push to `main`, and `prod` waits for approval on a GitHub `prod` environment. It needs the repository secrets `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_GIT_FOLDER` and `DATABRICKS_GIT_FOLDER_PROD`. Each job stays inactive until the repository variable `DEPLOY_DEV` or `DEPLOY_PROD` is `true`. The Git folder paths are secrets, and the workspace user name is masked, because Actions logs are public on a public repo and contain the Databricks user's email otherwise. The first run, on 2026-11-09, deployed both targets, and its log contained neither the email nor the workspace host. `prod` reads and writes its own schema, `self_healing_demo.pipeline_prod`, and its ingest loaded the same 7,500,000 rows. Dev and prod share one workspace. All six scenario jobs were run once in `prod` on 2026-11-09, from the code before the last two fixes, and matched dev: three succeeded, `contract_drift` and `null_violation` failed on the same contract clauses, and `oom` timed out.
+**Deployment.** [`deploy.yml`](.github/workflows/deploy.yml) validates and deploys to `dev` on every push to `main`, then runs `ingest_orders_raw` and `golden_job` there; `prod` is offered only if both pass, and waits for approval on a GitHub `prod` environment. It needs the repository secrets `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_GIT_FOLDER` and `DATABRICKS_GIT_FOLDER_PROD`. Each job stays inactive until the repository variable `DEPLOY_DEV` or `DEPLOY_PROD` is `true`. The Git folder paths are secrets, and the workspace user name is masked, because Actions logs are public on a public repo and contain the Databricks user's email otherwise. The first run, on 2026-11-09, deployed both targets, and its log contained neither the email nor the workspace host. `prod` reads and writes its own schema, `self_healing_demo.pipeline_prod`, and its ingest loaded the same 7,500,000 rows. Dev and prod share one workspace. All six scenario jobs were run once in `prod` on 2026-11-09, from the code before the last two fixes, and matched dev: three succeeded, `contract_drift` and `null_violation` failed on the same contract clauses, and `oom` timed out.
 
 ### Known limitations
 

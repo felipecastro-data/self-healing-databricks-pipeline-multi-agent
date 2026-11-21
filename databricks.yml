@@ -13,6 +13,10 @@ variables:
   schema:
     description: catalog.schema the jobs read and write.
     default: self_healing_demo.pipeline
+  warehouse_id:
+    description: SQL warehouse the results dashboard queries.
+    lookup:
+      warehouse: Serverless Starter Warehouse
   serverless_environment:
     description: Serverless environment shared by all jobs.
     type: complex
@@ -31,8 +35,20 @@ targets:
       name_prefix: prod-
     variables:
       schema: self_healing_demo.pipeline_prod
+    resources:
+      dashboards:
+        results:
+          dataset_schema: pipeline_prod
 
 resources:
+  dashboards:
+    # Serving stage: reads the tables publish_evidence writes.
+    results:
+      display_name: Self-healing pipeline results
+      file_path: dashboards/results.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: self_healing_demo
+      dataset_schema: pipeline
   jobs:
     ingest_orders_raw:
       name: self-healing-ingest-orders-raw
@@ -116,3 +132,13 @@ resources:
             python_file: ${var.git_folder}/src/databricks_entry.py
             source: WORKSPACE
             parameters: ["--src", "${var.git_folder}/src", "--job", "broken_scenarios.type_mismatch", "--schema", "${var.schema}"]
+    publish_evidence:
+      name: self-healing-publish-evidence
+      environments: ${var.serverless_environment}
+      tasks:
+        - task_key: self-healing-publish-evidence
+          environment_key: default
+          spark_python_task:
+            python_file: ${var.git_folder}/src/databricks_entry.py
+            source: WORKSPACE
+            parameters: ["--src", "${var.git_folder}/src", "--job", "publish_evidence", "--schema", "${var.schema}"]

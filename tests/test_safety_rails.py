@@ -73,6 +73,7 @@ def _run_main(monkeypatch, state):
     result = {"state": state, "run_id": 1, "run_page_url": "u"}
     monkeypatch.setattr(orchestrate.databricks_mcp, "run_job", lambda name: result)
     monkeypatch.setattr(orchestrate.databricks_mcp, "get_run_output", lambda run_id: "boom")
+    monkeypatch.setattr(orchestrate.databricks_mcp, "get_table_lineage", lambda name: [])
     monkeypatch.setattr("sys.argv", ["orchestrate", "job"])
     claude = MagicMock(return_value=MagicMock(returncode=0))
     monkeypatch.setattr(orchestrate.subprocess, "run", claude)

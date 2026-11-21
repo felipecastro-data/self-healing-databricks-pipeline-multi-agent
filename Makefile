@@ -7,7 +7,7 @@ TARGET ?= dev
 JOB ?= self-healing-type-mismatch
 export BUNDLE_VAR_git_folder ?= $(DATABRICKS_GIT_FOLDER)
 
-.PHONY: setup install deploy ingest demo report test lint
+.PHONY: setup install deploy ingest demo report publish test lint
 
 setup: install deploy ingest
 
@@ -28,6 +28,9 @@ demo:
 report:
 	$(PY) scripts/snapshot_run_history.py
 	$(PY) -m self_healing.journal > docs/results.md
+
+publish:
+	databricks bundle run -t $(TARGET) publish_evidence
 
 test:
 	$(PY) -m pytest

@@ -2,7 +2,7 @@
 
 Given a job_name, this script triggers that Databricks job via the MCP
 server's run_job tool and, if the run fails, fetches its output via
-get_run_output and hands off to a headless Claude Code session
+get_run_output, plus the job's table lineage via get_table_lineage, and hands off to a headless Claude Code session
 (`claude -p`) that runs the log-parser -> classifier -> patch-proposer
 chain defined in .claude/agents/ and CLAUDE.md.
 
@@ -37,7 +37,27 @@ _DISALLOWED_TOOLS = (
 )
 
 
-def _build_diagnostic_prompt(job_name: str, run_id: int, run_page_url: str | None, raw_output: str) -> str:
+def _format_lineage(job_name: str) -> str:
+    """Return the job's input tables and their upstream as text lines, or why they are unavailable.
+
+    Lineage is supplementary context, so a failure here never stops the diagnosis.
+    """
+    try:
+        rows = databricks_mcp.get_table_lineage(job_name)
+    except Exception as exc:
+        return f"unavailable ({type(exc).__name__}: {exc})"
+    if not rows:
+        return "no lineage recorded for this job"
+    return "\n".join(
+        f"{r['input_table']} <- {r['upstream_table'] or 'no recorded writer'}"
+        f" (job {r['upstream_job'] or 'n/a'}, last written {r['last_written'] or 'n/a'})"
+        for r in rows
+    )
+
+
+def _build_diagnostic_prompt(
+    job_name: str, run_id: int, run_page_url: str | None, raw_output: str, lineage: str
+) -> str:
     """Build the headless-session prompt that chains log-parser -> classifier -> patch-proposer."""
     return f"""A Databricks job run has failed. Run this project's diagnostic chain (see
 CLAUDE.md section 3) on the run output below, then stop.
@@ -51,8 +71,14 @@ Raw run output:
 {raw_output}
 ---
 
+Table lineage (system.access.table_lineage: the job's input tables <- what they were built from):
+---
+{lineage}
+---
+
 Steps:
-1. Invoke the `log-parser` subagent with the raw run output above as its input. Show its structured excerpt.
+1. Invoke the `log-parser` subagent with the raw run output and the table lineage above as its input.
+   Show its structured excerpt.
 2. Invoke the `classifier` subagent with log-parser's excerpt as its input. Show its classification.
 3. Invoke the `patch-proposer` subagent with classifier's output and log-parser's excerpt as its input.
    Show its proposed patch.
@@ -85,7 +111,8 @@ def main() -> int:
     print("Fetching run output...", flush=True)
     raw_output = databricks_mcp.get_run_output(str(result["run_id"]))
 
-    prompt = _build_diagnostic_prompt(args.job_name, result["run_id"], result["run_page_url"], raw_output)
+    lineage = _format_lineage(args.job_name)
+    prompt = _build_diagnostic_prompt(args.job_name, result["run_id"], result["run_page_url"], raw_output, lineage)
 
     print(
         "Invoking diagnostic chain (log-parser -> classifier -> patch-proposer) via headless Claude Code...\n",

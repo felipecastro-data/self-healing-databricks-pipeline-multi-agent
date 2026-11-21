@@ -28,3 +28,11 @@ Job ids are no longer stored in a generated `job_ids.json`. The MCP server looks
 - Deploying changes job definitions. Code changes reach a target when its Git folder updates, which `deploy.yml` does after each deploy.
 - Each target needs its Git folder to exist before its jobs can run.
 - Prod is gated by a GitHub environment approval. It shares a workspace with dev, so it shows the promotion path but not real isolation.
+
+## Why no test target
+
+The promotion path is `dev` -> `prod`, with no `test` stage between them.
+
+- Databricks Free Edition gives one workspace, so a `test` target would be a third schema in the same workspace as the other two. It would add a deploy and an approval but no isolation that `dev` lacks.
+- The check a `test` stage would run already runs in `dev`: `deploy.yml` runs `ingest_orders_raw` and `golden_job` there after deploying, and the golden job validates `orders_raw` and `orders_summary` against their contracts before writing. If either job fails, the `prod` job doesn't start, so prod's approval is always backed by a passing run.
+- With a paid workspace per environment, `test` would be its own workspace and target, and this section would no longer apply.
