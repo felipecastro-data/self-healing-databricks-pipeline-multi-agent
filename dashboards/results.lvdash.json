@@ -1,0 +1,489 @@
+{
+  "datasets": [
+    {
+      "name": "kpis",
+      "displayName": "Headline numbers",
+      "queryLines": [
+        "SELECT\n",
+        "  (SELECT count(*) FROM evidence_runs) AS runs,\n",
+        "  (SELECT count_if(result_state = 'FAILED') FROM evidence_runs) AS failed_runs,\n",
+        "  count(*) AS rounds,\n",
+        "  count_if(applied) AS patches_applied,\n",
+        "  count_if(outcome = 'SUCCESS') AS patches_verified,\n",
+        "  CAST(median(diagnosis_s) AS INT) AS median_diagnosis_s\n",
+        "FROM evidence_rounds"
+      ]
+    },
+    {
+      "name": "runs_by_job",
+      "displayName": "Runs by job",
+      "queryLines": [
+        "SELECT job_name, result_state, count(*) AS runs FROM evidence_runs GROUP BY ALL"
+      ]
+    },
+    {
+      "name": "rounds_by_category",
+      "displayName": "Diagnoses by category",
+      "queryLines": [
+        "SELECT category, count(*) AS rounds FROM evidence_rounds GROUP BY ALL"
+      ]
+    },
+    {
+      "name": "diagnosis_time",
+      "displayName": "Diagnosis time",
+      "queryLines": [
+        "SELECT started, category, diagnosis_s FROM evidence_rounds WHERE diagnosis_s IS NOT NULL"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "results",
+      "displayName": "Results",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Self-healing pipeline results\n",
+                "Loaded by the `publish_evidence` job from `evidence/run_history.json` and `evidence/run_journal.jsonl`. Diagnosis time runs from log-parser finishing to patch-proposer finishing."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "runs",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "runs",
+                      "expression": "`runs`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "runs",
+                  "displayName": "Job runs"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Job runs"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "failed_runs",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "failed_runs",
+                      "expression": "`failed_runs`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "failed_runs",
+                  "displayName": "Failed runs"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Failed runs"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "rounds",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "rounds",
+                      "expression": "`rounds`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "rounds",
+                  "displayName": "Diagnostic rounds"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Diagnostic rounds"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "patches_applied",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "patches_applied",
+                      "expression": "`patches_applied`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "patches_applied",
+                  "displayName": "Patches applied"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Patches applied"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "patches_verified",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "patches_verified",
+                      "expression": "`patches_verified`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "patches_verified",
+                  "displayName": "Patches verified"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Patches verified"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "median_diagnosis",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "median_diagnosis_s",
+                      "expression": "`median_diagnosis_s`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "median_diagnosis_s",
+                  "displayName": "Median diagnosis (s)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Median diagnosis (s)"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "runs_by_job",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "runs_by_job",
+                  "fields": [
+                    {
+                      "name": "job_name",
+                      "expression": "`job_name`"
+                    },
+                    {
+                      "name": "result_state",
+                      "expression": "`result_state`"
+                    },
+                    {
+                      "name": "sum(runs)",
+                      "expression": "SUM(`runs`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "job_name",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Job"
+                },
+                "y": {
+                  "fieldName": "sum(runs)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Runs"
+                },
+                "color": {
+                  "fieldName": "result_state",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Result"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Runs by job"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "rounds_by_category",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "rounds_by_category",
+                  "fields": [
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "sum(rounds)",
+                      "expression": "SUM(`rounds`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "category",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Category"
+                },
+                "y": {
+                  "fieldName": "sum(rounds)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Diagnostic rounds"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Diagnoses by failure category"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 5,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "diagnosis_time",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "diagnosis_time",
+                  "fields": [
+                    {
+                      "name": "started",
+                      "expression": "`started`"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "sum(diagnosis_s)",
+                      "expression": "SUM(`diagnosis_s`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "started",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Round started (UTC)"
+                },
+                "y": {
+                  "fieldName": "sum(diagnosis_s)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Diagnosis time (s)"
+                },
+                "color": {
+                  "fieldName": "category",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Category"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Diagnosis time per round"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 6,
+            "height": 6
+          }
+        }
+      ]
+    }
+  ]
+}

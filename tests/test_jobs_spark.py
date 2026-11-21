@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 from pyspark.sql import SparkSession
 
-from self_healing.jobs import golden_job, ingest_orders_raw
+from self_healing.jobs import golden_job, ingest_orders_raw, publish_evidence
 from self_healing.jobs.broken_scenarios import bad_join, contract_drift, null_violation
 from self_healing.jobs.checks import DataQualityError
 from self_healing.jobs.contract import load_contract, validate_contract
@@ -104,3 +104,11 @@ def test_entry_point_runs_the_named_job(spark, orders, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["entry", "--src", "src", "--job", "golden_job", "--schema", SCHEMA])
     databricks_entry.main(spark)
     assert spark.table(f"{SCHEMA}.orders_summary").count() == 2
+
+
+def test_publish_evidence_loads_the_committed_evidence(spark):
+    publish_evidence.run(spark, SCHEMA)
+    runs = spark.table(f"{SCHEMA}.evidence_runs")
+    rounds = spark.table(f"{SCHEMA}.evidence_rounds")
+    assert runs.count() > 0 and runs.where("start_time IS NULL").count() == 0
+    assert rounds.where("category = 'schema_drift' AND clause = 'columns.o_totalprice.present'").count() > 0
