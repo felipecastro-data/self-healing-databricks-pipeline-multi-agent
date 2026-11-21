@@ -44,7 +44,7 @@ These come from four calls per agent on two logs of about 3,300 characters. Long
 | Area | Today | Risk | Better |
 |---|---|---|---|
 | Databricks identity | A personal access token in `.env` | It carries all of the user's permissions | A service principal with OAuth and access to only these jobs and schemas, where the workspace allows it |
-| MCP tools | Four tools; two are gated | `apply_patch` can edit any file in the repo, including hooks and CI | Limit it to `src/self_healing/jobs/` |
+| MCP tools | Five tools; two are gated, and `get_table_lineage` is read-only | `apply_patch` can edit any file in the repo, including hooks and CI | Limit it to `src/self_healing/jobs/` |
 | Git pushes | The whole current branch ([ADR 0003](adr/0003-push-whole-branch.md)) | Other local commits are published too | One branch and pull request per patch |
 | Log content | Passed to the agents as text | A log line could contain instructions aimed at a model | Agents have read-only tools, and every change still needs approval |
 | Secrets in evidence | Hooks redact the workspace host and user path | Only those two patterns are covered | Add secret scanning in CI |
