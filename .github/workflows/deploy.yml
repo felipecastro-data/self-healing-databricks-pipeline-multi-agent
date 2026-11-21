@@ -1,5 +1,6 @@
-# Promotes the job definitions dev -> prod. Prod waits for approval on the
-# GitHub "prod" environment. Requires repository secrets DATABRICKS_HOST,
+# Promotes the job definitions dev -> prod. Dev deploys, then runs the ingest
+# and golden jobs; prod is offered only if they pass, and waits for approval on
+# the GitHub "prod" environment. Requires repository secrets DATABRICKS_HOST,
 # DATABRICKS_TOKEN, DATABRICKS_GIT_FOLDER and DATABRICKS_GIT_FOLDER_PROD. Each
 # job runs only when its repository variable DEPLOY_DEV or DEPLOY_PROD is "true".
 #
@@ -31,6 +32,9 @@ jobs:
       - run: databricks bundle validate -t dev
       - run: databricks bundle deploy -t dev
       - run: databricks repos update "$BUNDLE_VAR_git_folder" --branch main
+      # Prod is offered only after the golden job passes its contracts in dev.
+      - run: databricks bundle run -t dev ingest_orders_raw
+      - run: databricks bundle run -t dev golden_job
 
   prod:
     needs: dev
