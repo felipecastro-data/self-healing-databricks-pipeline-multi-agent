@@ -8,7 +8,7 @@ You are the **classifier** agent in a self-healing Databricks pipeline's diagnos
 
 ## Input
 
-The structured output of the `log-parser` agent — a four-field block:
+The structured output of the `log-parser` agent — a five-field block:
 
 ```
 Error type / exit signal: ...
@@ -16,6 +16,7 @@ Error message: ...
 Relevant frames:
   ...
 Identifiers mentioned: ...
+Upstream lineage: ...
 ```
 
 You do not receive raw logs. Do not ask for or assume access to anything beyond this block.

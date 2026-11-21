@@ -23,6 +23,7 @@ Two things, produced by the upstream agents in the chain:
    Relevant frames:
      <file>:<line> — ...
    Identifiers mentioned: ...
+   Upstream lineage: ...
    ```
 
 You do not receive raw logs and do not re-diagnose the failure. The classification is given to you as fact.
@@ -30,6 +31,8 @@ You do not receive raw logs and do not re-diagnose the failure. The classificati
 ## Task
 
 Fill in **exactly one** of the five fixed remediation templates below — the one matching the given classification — using specifics pulled from the log-parser excerpt: table/column/join-key names from "Identifiers mentioned", and the file:line to target from "Relevant frames". A contract clause such as `columns.total_value.not_null` names the offending column.
+
+For `schema_drift`, end the Rationale by naming where the drifted input comes from, copied from "Upstream lineage" (e.g. `source: orders_raw <- samples.tpch.orders, written by self-healing-ingest-orders-raw`). If lineage is unavailable, say `source: lineage unavailable`; never guess one.
 
 ### The five templates (restated verbatim from CLAUDE.md section 2 — no drift)
 

@@ -1,18 +1,20 @@
 """MCP server exposing Databricks Jobs API operations to agents.
 
-Built on the official Python MCP SDK (FastMCP). Exposes four tools that
+Built on the official Python MCP SDK (FastMCP). Exposes five tools that
 replace the manual Databricks-UI copy/paste steps in this project's
 diagnose-and-remediate loop:
 
 - list_runs        — recent run history for a named job
 - get_run_output    — plain-text error/output for one run (feeds log-parser)
+- get_table_lineage — read-only: the job's input tables and where they come from
 - apply_patch       — applies patch-proposer's diff, commits, pushes, and
                        syncs the workspace Git folder
 - run_job           — triggers a job and waits for it to finish
 
 All tools authenticate via DATABRICKS_HOST / DATABRICKS_TOKEN loaded from
-.env. job_name -> job_id resolution looks the job up by its exact name in the
-workspace; the jobs themselves are declared in databricks.yml.
+.env; get_table_lineage also needs DATABRICKS_WAREHOUSE_ID. job_name -> job_id
+resolution looks the job up by its exact name in the workspace; the jobs
+themselves are declared in databricks.yml.
 
 Run standalone for local testing: python -m self_healing.mcp.databricks_mcp
 """
@@ -23,6 +25,7 @@ import difflib
 import os
 import re
 import subprocess
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -30,6 +33,7 @@ from typing import Any
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import OperationFailed
 from databricks.sdk.service.jobs import BaseRun, RunLifeCycleState
+from databricks.sdk.service.sql import StatementParameterListItem, StatementState
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
@@ -48,6 +52,9 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 # pathological) took ~13 minutes. 15 minutes gives that worst case headroom
 # without leaving orchestration able to hang indefinitely on a stuck run.
 RUN_JOB_TIMEOUT = timedelta(minutes=15)
+
+# Covers a stopped serverless warehouse starting up before the lineage query runs.
+SQL_TIMEOUT = timedelta(minutes=3)
 
 mcp = FastMCP("databricks-self-healing-pipeline")
 
@@ -193,6 +200,95 @@ def get_run_output(run_id: str) -> str:
             "output is a notebook/SQL/dashboard result type this tool doesn't parse)"
         )
     return text
+
+
+def _warehouse_id() -> str:
+    """Return the SQL warehouse id from DATABRICKS_WAREHOUSE_ID in .env."""
+    warehouse_id = os.environ.get("DATABRICKS_WAREHOUSE_ID", "").strip()
+    if not warehouse_id:
+        raise RuntimeError("DATABRICKS_WAREHOUSE_ID is not set. Add it to .env (see .env.example).")
+    return warehouse_id
+
+
+def _run_sql(w: WorkspaceClient, statement: str, params: list[StatementParameterListItem]) -> list[list[str | None]]:
+    """Run one parameterized SQL statement on the warehouse and return its rows; raise on failure."""
+    resp = w.statement_execution.execute_statement(
+        warehouse_id=_warehouse_id(),
+        statement=statement,
+        parameters=params,
+        wait_timeout="50s",
+    )
+    deadline = time.monotonic() + SQL_TIMEOUT.total_seconds()
+    while resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
+        if time.monotonic() > deadline:
+            w.statement_execution.cancel_execution(resp.statement_id)
+            raise TimeoutError(f"SQL statement did not finish within {SQL_TIMEOUT}")
+        time.sleep(2)
+        resp = w.statement_execution.get_statement(resp.statement_id)
+    if resp.status.state != StatementState.SUCCEEDED:
+        error = resp.status.error.message if resp.status.error else resp.status.state.value
+        raise RuntimeError(f"SQL statement failed: {error}")
+    return (resp.result.data_array if resp.result else None) or []
+
+
+# The tables a job reads, and who last wrote each of them from what. In this
+# project a job's target is built from the tables it reads, so these are the
+# target's upstream; a failed run still records its reads.
+_UPSTREAM_SQL = """
+WITH inputs AS (
+  SELECT DISTINCT source_table_full_name AS input_table
+  FROM system.access.table_lineage
+  WHERE entity_type = 'JOB' AND entity_id = :job_id
+    AND source_table_full_name IS NOT NULL
+    AND event_date >= date_sub(current_date(), :days)
+)
+SELECT i.input_table, l.source_table_full_name, l.entity_id, CAST(max(l.event_time) AS STRING)
+FROM inputs i
+LEFT JOIN system.access.table_lineage l
+  ON l.target_table_full_name = i.input_table
+  AND l.source_table_full_name IS NOT NULL
+  AND l.entity_type = 'JOB'
+  AND l.event_date >= date_sub(current_date(), :days)
+GROUP BY ALL
+ORDER BY 1, 4 DESC
+"""
+
+
+@mcp.tool()
+def get_table_lineage(job_name: str, days: int = 90) -> list[dict[str, Any]]:
+    """List the tables a named job reads and where each one comes from, from system.access.table_lineage.
+
+    Read-only. Each row is one input table of the job (the upstream of its
+    target), the table that input was last built from, the job that built it,
+    and when. A contract_drift diagnosis uses this to name the source that
+    changed. Upstream fields are None when no job wrote the input in the window.
+    """
+    if not 1 <= days <= 365:
+        raise ValueError(f"days must be between 1 and 365, got {days}")
+    w = _client()
+    job_id = _resolve_job_id(w, job_name)
+    params = [
+        StatementParameterListItem(name="job_id", value=str(job_id)),
+        StatementParameterListItem(name="days", value=str(days), type="INT"),
+    ]
+    rows = _run_sql(w, _UPSTREAM_SQL, params)
+
+    names: dict[str, str] = {}
+    for _, _, producer_id, _ in rows:
+        if producer_id and producer_id not in names:
+            try:
+                names[producer_id] = w.jobs.get(job_id=int(producer_id)).settings.name
+            except Exception:
+                names[producer_id] = producer_id  # deleted or not visible: keep the id
+    return [
+        {
+            "input_table": input_table,
+            "upstream_table": upstream,
+            "upstream_job": names.get(producer_id) if producer_id else None,
+            "last_written": last_written,
+        }
+        for input_table, upstream, producer_id, last_written in rows
+    ]
 
 
 @mcp.tool()
