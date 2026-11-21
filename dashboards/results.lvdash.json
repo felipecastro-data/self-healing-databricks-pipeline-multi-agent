@@ -32,7 +32,10 @@
       "name": "diagnosis_time",
       "displayName": "Diagnosis time",
       "queryLines": [
-        "SELECT started, category, diagnosis_s FROM evidence_rounds WHERE diagnosis_s IS NOT NULL"
+        "-- One bar per round. The label starts with the date so the alphabetical axis is chronological.\n",
+        "SELECT concat(date_format(started, 'MM-dd HH:mm'), ' ', coalesce(scenario, 'unknown')) AS round, category, diagnosis_s\n",
+        "FROM evidence_rounds\n",
+        "WHERE diagnosis_s IS NOT NULL"
       ]
     }
   ],
@@ -428,8 +431,8 @@
                   "datasetName": "diagnosis_time",
                   "fields": [
                     {
-                      "name": "started",
-                      "expression": "`started`"
+                      "name": "round",
+                      "expression": "`round`"
                     },
                     {
                       "name": "category",
@@ -449,11 +452,14 @@
               "widgetType": "bar",
               "encodings": {
                 "x": {
-                  "fieldName": "started",
+                  "fieldName": "round",
                   "scale": {
-                    "type": "temporal"
+                    "type": "categorical",
+                    "sort": {
+                      "by": "natural-order"
+                    }
                   },
-                  "displayName": "Round started (UTC)"
+                  "displayName": "Round (UTC start, scenario)"
                 },
                 "y": {
                   "fieldName": "sum(diagnosis_s)",
